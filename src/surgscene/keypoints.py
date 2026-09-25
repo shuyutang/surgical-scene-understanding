@@ -32,6 +32,12 @@ def render_heatmaps(kp: np.ndarray, h: int, w: int, sigma: float = SIGMA) -> np.
     return hm
 
 
+def _disk(rng) -> np.ndarray:
+    """Uniform random point in the unit disk."""
+    a, r = rng.uniform(0, 2 * np.pi), np.sqrt(rng.uniform())
+    return np.array([np.cos(a), np.sin(a)]) * r
+
+
 def paste_occluder(img: np.ndarray, center: tuple[float, float], radius: float, rng) -> np.ndarray:
     """Cover a disk around `center` with a tissue patch copied from elsewhere in the same image."""
     h, w = img.shape[:2]
@@ -61,12 +67,15 @@ class KeypointDataset(Dataset):
     occlude per item (for the controlled occlusion test) or None."""
 
     def __init__(self, records: list[dict], augment: bool = False, occlude: list[list[int]] | None = None,
-                 occluder_radius: float = 18.0, seed: int = 0):
+                 occluder_radius: float = 18.0, seed: int = 0, occluder_offset: float = 0.0,
+                 decentered_aug: bool = False):
         self.records = records
         self.augment = augment
         self.occlude = occlude
         self.occluder_radius = occluder_radius
         self.seed = seed
+        self.occluder_offset = occluder_offset  # max center offset, as a fraction of the radius
+        self.decentered_aug = decentered_aug
         self.rng = np.random.default_rng(seed)
 
     def __len__(self):
@@ -93,7 +102,14 @@ class KeypointDataset(Dataset):
         # the structured prior (Phase 3) is what should recover them
         for j in np.flatnonzero(rng.random(len(kp)) < 0.1):
             if np.isfinite(kp[j]).all():
-                img = paste_occluder(img, kp[j], rng.uniform(10, 25), rng)
+                r = rng.uniform(10, 25)
+                c = kp[j] + (_disk(rng) * 0.7 * r if self.decentered_aug else 0)
+                img = paste_occluder(img, c, r, rng)
+        if self.decentered_aug:
+            # distractor patches away from keypoints, so "a pasted blob" carries no keypoint information
+            h, w = img.shape[:2]
+            for _ in range(rng.poisson(1.0)):
+                img = paste_occluder(img, (rng.uniform(30, w - 30), rng.uniform(30, h - 30)), rng.uniform(10, 25), rng)
         return img, kp
 
     def __getitem__(self, i):
@@ -106,7 +122,8 @@ class KeypointDataset(Dataset):
             rng = np.random.default_rng(self.seed * 100003 + i)
             for j in self.occlude[i]:
                 if np.isfinite(kp[j]).all():  # unlabeled keypoints have nothing to occlude
-                    img = paste_occluder(img, kp[j], self.occluder_radius, rng)
+                    c = kp[j] + _disk(rng) * self.occluder_offset * self.occluder_radius
+                    img = paste_occluder(img, c, self.occluder_radius, rng)
         h, w = img.shape[:2]
         hm = render_heatmaps(kp, h, w)
         return normalize(img), torch.from_numpy(hm), torch.from_numpy(kp.astype(np.float32)), i

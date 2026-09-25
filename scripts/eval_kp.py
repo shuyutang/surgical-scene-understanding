@@ -36,10 +36,10 @@ def occlusion_plan(n: int, seed: int) -> list[list[int]]:
 
 
 @torch.no_grad()
-def infer(model, records, occlude, cache: Path):
+def infer(model, records, occlude, cache: Path, offset: float = 0.0):
     if cache.exists():
         return dict(np.load(cache))
-    ds = KeypointDataset(records, occlude=occlude, occluder_radius=OCC_RADIUS, seed=1)
+    ds = KeypointDataset(records, occlude=occlude, occluder_radius=OCC_RADIUS, seed=1, occluder_offset=offset)
     out = {k: [] for k in ["kp", "conf", "sigma", "cand", "cand_conf", "gt"]}
     for x, _, kp, _ in tqdm(DataLoader(ds, 16, num_workers=8), desc=cache.stem):
         with torch.autocast("cuda", dtype=torch.bfloat16):
@@ -93,9 +93,11 @@ def boot_mean(err, groups, n_boot=2000, seed=0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ckpt")
+    ap.add_argument("--occluder-offset", type=float, default=0.0,
+                    help="max occluder-center offset as a fraction of its radius (0 = centered on the keypoint)")
     args = ap.parse_args()
     run = Path(args.ckpt).parent
-    out_dir = run / "eval_structured"
+    out_dir = run / ("eval_structured" if args.occluder_offset == 0 else f"eval_structured_off{args.occluder_offset:g}")
     out_dir.mkdir(exist_ok=True)
 
     # 1. shape models from train GT (both eyes)
@@ -121,7 +123,8 @@ def main():
         recs = load_records(split)
         groups = np.array([r["traj"] for r in recs])
         sets[(split, "clean")] = (infer(net, recs, None, out_dir / f"obs_{split}_clean.npz"), groups)
-        sets[(split, "occluded")] = (infer(net, recs, occlusion_plan(len(recs), 7), out_dir / f"obs_{split}_occ.npz"), groups)
+        sets[(split, "occluded")] = (infer(net, recs, occlusion_plan(len(recs), 7), out_dir / f"obs_{split}_occ.npz",
+                                           args.occluder_offset), groups)
 
     # 3. tune on dev: minimize mean error over clean + occluded dev (all keypoints)
     grid = list(itertools.product([0.05, 0.1, 0.2, 0.3], [0.3, 1.0, 3.0], [2.0, 3.0, 5.0]))
@@ -139,7 +142,7 @@ def main():
     print("selected on dev:", hp, f"(dev mean err {best[0]:.2f}px)")
 
     # 4. test
-    R = {"checkpoint": args.ckpt, "hyperparams_selected_on_dev": hp,
+    R = {"checkpoint": args.ckpt, "occluder_offset": args.occluder_offset, "hyperparams_selected_on_dev": hp,
          "shape_models": {a: {"modes": len(m.lam), "var_frac": (m.lam / m.lam.sum()).round(4).tolist(),
                               "plaus99_train": plaus_max[a]} for a, m in models.items()},
          "results": {}}
@@ -194,6 +197,7 @@ def f(v):
 
 def render(R):
     L = ["# Phase 2–3: keypoints and structured inference (SurgPose test, trajectories 20–33)", "",
+         f"Checkpoint `{R['checkpoint']}`; occluder center offset ≤ {R['occluder_offset']:g}×radius. "
          f"Hyperparameters selected on dev: `{R['hyperparams_selected_on_dev']}`. Errors in native pixels "
          "(1400×986). 95% CIs: trajectory-clustered bootstrap.", "",
          "Shape models (train GT): " + "; ".join(f"{a}: {m['modes']} modes, variance fractions {m['var_frac']}"

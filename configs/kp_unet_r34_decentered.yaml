@@ -1,0 +1,12 @@
+name: kp_unet_r34_decentered
+arch: unet
+encoder: resnet34
+num_keypoints: 10
+epochs: 20
+batch_size: 8
+lr: 3.0e-4
+weight_decay: 1.0e-4
+eval_every: 2
+workers: 12
+seed: 0
+decentered_aug: true

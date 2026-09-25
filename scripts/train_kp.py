@@ -48,7 +48,7 @@ def main():
     run_dir.mkdir(parents=True)
     write_runinfo(run_dir, cfg)
 
-    train_dl = DataLoader(KeypointDataset(load_records("train"), augment=True), cfg["batch_size"], shuffle=True,
+    train_dl = DataLoader(KeypointDataset(load_records("train"), augment=True, decentered_aug=cfg.get("decentered_aug", False)), cfg["batch_size"], shuffle=True,
                           num_workers=cfg["workers"], drop_last=True, pin_memory=True, persistent_workers=True,
                           worker_init_fn=worker_init)
     dev_dl = DataLoader(KeypointDataset(load_records("dev")), 16, num_workers=cfg["workers"])
