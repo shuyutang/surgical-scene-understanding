@@ -105,7 +105,8 @@ class KeypointDataset(Dataset):
         if self.occlude is not None:
             rng = np.random.default_rng(self.seed * 100003 + i)
             for j in self.occlude[i]:
-                img = paste_occluder(img, kp[j], self.occluder_radius, rng)
+                if np.isfinite(kp[j]).all():  # unlabeled keypoints have nothing to occlude
+                    img = paste_occluder(img, kp[j], self.occluder_radius, rng)
         h, w = img.shape[:2]
         hm = render_heatmaps(kp, h, w)
         return normalize(img), torch.from_numpy(hm), torch.from_numpy(kp.astype(np.float32)), i
