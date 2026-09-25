@@ -7,8 +7,8 @@ Pre-specified acceptance criteria are in [docs/validation_plan.md](docs/validati
 | Phase | What | Data | Status |
 |---|---|---|---|
 | 1 | Dense segmentation (32 classes) + evaluation harness | SISVSE (train/test), EndoVis18 (zero-shot) | done: [report](docs/phase1_test_report.md) |
-| 2 | Instrument keypoint heatmaps | SurgPose | done |
-| 3 | Shape prior + robust MAP (continuous LM, discrete candidates) | SurgPose | done: [report](docs/phase23_test_report.md) |
+| 2 | Instrument keypoint heatmaps | SurgPose | done (K1 fails: background shift) |
+| 3 | Shape prior + robust MAP (continuous LM, discrete candidates) | SurgPose | done: [pre-specified](docs/phase23_test_report.md), [post hoc](docs/phase23_posthoc_decentered_report.md), [summary](docs/phase1-3_summary.md) |
 | 4–6 | Temporal, stereo/3D, C++/TensorRT | | not started |
 
 ## Setup

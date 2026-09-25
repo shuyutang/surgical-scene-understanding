@@ -104,3 +104,32 @@ test set is also a domain-shift test.
 | H2 | The prior doesn't hurt when evidence is good: MAP − argmax mean error, clean test | upper 95% bound ≤ +1.0 px |
 | H3 | MAP outputs are anatomically plausible: implausible rate (train-GT 99th-percentile threshold), occluded test | MAP < argmax (point estimate) |
 | E1 (exploratory) | Discrete top-N candidate MAP vs continuous MAP; PCK@5/10/20; per-keypoint error; confidence reliability; runtime | report only |
+
+## Amendment 1 (2026-09-25, POST HOC: after the Phase 2–3 test set was seen)
+
+**Pre-specified outcome (stands as reported):** K1 FAIL, H1 FAIL, H2 PASS, H3 PASS
+([report](phase23_test_report.md)).
+
+**Why H1 failed: a protocol leak, found by diagnosis.** Training augmentation pasted occluders
+*centered on keypoints*, and the test protocol did the same. The network learned "the center of a
+pasted blob is a keypoint". Evidence: the same test keypoints were localized *better* when
+occluded (13.9 → 10.9 px mean) with almost no drop in confidence.
+
+**Diagnostic** (same model, test occluders offset up to 0.6× radius, still covering the keypoint):
+occluded-keypoint error rose to 18.8 px, and MAP − argmax on occluded keypoints was
+−1.43 [−2.22, −0.71] px ([report](phase23_posthoc_diagnostic_offcenter_report.md)).
+
+**Fix:** retrained with off-center occluders plus random distractor patches
+(`configs/kp_unet_r34_decentered.yaml`). Evaluated with off-center test occluders; solver
+hyperparameters re-selected on dev ([report](phase23_posthoc_decentered_report.md)):
+
+| ID | Post-hoc result | Would-be verdict |
+|---|---|---|
+| K1 | argmax clean 14.01 [10.37, 17.40] px | still FAIL (background domain shift; shaft keypoint dominates) |
+| H1 | occluded MAP − argmax −1.47 [−2.09, −0.83] px | holds |
+| H2 | clean MAP − argmax +0.01 [−0.84, 0.75] px | holds |
+| H3 | implausible 17.2% → 1.4% (occluded) | holds |
+
+These are post-hoc results on a test set that had already been seen. They generate hypotheses
+and are not confirmatory. A confirmatory re-test needs fresh data, e.g. SurgPose's
+green-channel videos or new trajectories.
