@@ -77,3 +77,30 @@ Acceptance criteria are unchanged. Dev ECE after scaling (0.013) is in-sample an
 the test set is the real check.
 
 Model under test: `runs/seg_unet_r34_20260924-230723/best.pt` (epoch 55, selected on dev mIoU).
+
+---
+
+# Validation Plan: Phases 2–3 Keypoints + Structured Inference (pre-specified 2026-09-25)
+
+Committed before any evaluation on SurgPose test trajectories 20–33. Those trajectories use
+different ex vivo backgrounds from train/dev (chicken thigh / beef vs. gizzard / liver), so the
+test set is also a domain-shift test.
+
+- **Model under test:** `runs/kp_unet_r34_20260925-001134/best.pt` (epoch 20, dev PCK@10 = 0.967).
+- **Data:** test = 14 trajectories, every 5th frame, left eye (2,814 frames, hash `977ab824eb176fa9`).
+  Unit of analysis = trajectory (14); trajectory-clustered bootstrap, 2,000 replicates.
+- **Occlusion protocol:** in every test frame, one uniformly random keypoint per instrument is
+  covered by a 36 px-radius (native) tissue patch from the same image (fixed seed). This is a
+  controlled stand-in for real occlusion. Real occlusions (tissue folds, other instrument) are
+  not labeled in SurgPose.
+- **Solver hyperparameters** (confidence gate, prior weight β, Cauchy scale) are chosen by grid
+  search on dev (clean + occluded), never on test.
+- **Shape models** are fit on train ground truth only.
+
+| ID | Hypothesis / endpoint | Criterion |
+|---|---|---|
+| K1 | Keypoint detection works under the background shift: argmax mean error, clean test | upper 95% bound ≤ 15 px |
+| H1 (primary) | The shape prior recovers occluded keypoints: MAP − argmax error on occluded keypoints | upper 95% bound < 0 |
+| H2 | The prior doesn't hurt when evidence is good: MAP − argmax mean error, clean test | upper 95% bound ≤ +1.0 px |
+| H3 | MAP outputs are anatomically plausible: implausible rate (train-GT 99th-percentile threshold), occluded test | MAP < argmax (point estimate) |
+| E1 (exploratory) | Discrete top-N candidate MAP vs continuous MAP; PCK@5/10/20; per-keypoint error; confidence reliability; runtime | report only |
