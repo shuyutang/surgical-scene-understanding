@@ -29,7 +29,7 @@ SCALE = 0.5
 PAD_WH = (704, 512)
 KP_IDS = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12]
 SPLITS = {"train": range(0, 18), "dev": range(18, 20), "test": range(20, 34)}
-STRIDE = {"train": 3, "dev": 5, "test": 5}
+STRIDE = {"train": 6, "dev": 5, "test": 5}
 
 
 def load_kp(path: Path) -> dict[int, np.ndarray]:

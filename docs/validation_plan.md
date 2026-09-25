@@ -67,3 +67,13 @@ them is future work.
 
 Temporal stability (SISVSE frames are a median of 13 s apart; covered in Phase 4 on
 SurgPose), latency (Phase 6), and 3D accuracy (Phase 5).
+
+## Methods note (2026-09-24, before any test evaluation)
+
+The dev evaluation showed pixel ECE 0.068, which fails S3 on dev. A single softmax temperature
+was fitted on dev pixels by NLL (`scripts/calibrate_seg.py`; T = 1.56) and is applied to all
+confidences from then on. Argmax is unchanged, so no Dice/IoU/BF endpoint is affected.
+Acceptance criteria are unchanged. Dev ECE after scaling (0.013) is in-sample and optimistic;
+the test set is the real check.
+
+Model under test: `runs/seg_unet_r34_20260924-230723/best.pt` (epoch 55, selected on dev mIoU).

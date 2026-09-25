@@ -43,18 +43,19 @@ def _stats_job(args):
 
 
 @torch.no_grad()
-def predict(model, dataset, frames):
+def predict(model, dataset, frames, temperature=1.0):
     dl = torch.utils.data.DataLoader(SegDataset(dataset, frames), 16, num_workers=8)
     for x, y, idx in dl:
         with torch.autocast("cuda", dtype=torch.bfloat16):
-            prob = model(x.cuda().to(memory_format=torch.channels_last)).float().softmax(1)
+            logits = model(x.cuda().to(memory_format=torch.channels_last)).float()
+        prob = (logits / temperature).softmax(1)
         conf, pred = prob.max(1)
         for p, c, g in zip(pred.cpu().numpy().astype(np.uint8), conf.cpu().numpy(), y.numpy().astype(np.uint8)):
             yield p, c, g
 
 
-def run_set(model, dataset, frames, workers=16):
-    jobs = ((p, c, g, dataset) for p, c, g in predict(model, dataset, frames))
+def run_set(model, dataset, frames, temperature=1.0, workers=16):
+    jobs = ((p, c, g, dataset) for p, c, g in predict(model, dataset, frames, temperature))
     with ProcessPoolExecutor(workers) as ex:
         res = list(tqdm(ex.map(_stats_job, jobs, chunksize=4), total=len(frames), desc=dataset))
     return {k: stack([r[k] for r in res]) for k in res[0]}
@@ -82,16 +83,18 @@ def main():
     model = build_seg_model(cfg["arch"], cfg["encoder"], cfg["num_classes"], pretrained=False)
     model.load_state_dict(ck["model"])
     model = model.cuda().eval().to(memory_format=torch.channels_last)
+    t_file = Path(args.ckpt).parent / "temperature.json"
+    temperature = json.loads(t_file.read_text())["temperature"] if t_file.exists() else 1.0
     out_dir = Path(args.ckpt).parent / f"eval_{args.split}"
     out_dir.mkdir(exist_ok=True)
 
     frames = sisvse_frames(args.split)
     groups = [sisvse_group(f) for f in frames]
-    internal = run_set(model, "sisvse", frames)
+    internal = run_set(model, "sisvse", frames, temperature)
     # The external set is used whole in both modes: it is never trained or tuned on.
     ev_frames = endovis18_frames()
     ev_groups = [endovis18_group(f) for f in ev_frames]
-    external = run_set(model, "endovis18", ev_frames)
+    external = run_set(model, "endovis18", ev_frames, temperature)
 
     # subgroup cut-points from the train split (pre-specified)
     train_px = proxies("sisvse", sisvse_frames("train"))
@@ -107,7 +110,7 @@ def main():
                         **{f"external_{k}_{f}": v for k, d in external.items() for f, v in d.items()})
 
     n = args.n_boot
-    R = {"checkpoint": str(args.ckpt), "epoch": ck["epoch"], "split": args.split,
+    R = {"checkpoint": str(args.ckpt), "epoch": ck["epoch"], "split": args.split, "temperature": temperature,
          "n_frames": len(frames), "n_groups": len(set(groups)),
          "external_n_frames": len(ev_frames), "external_n_groups": len(set(ev_groups))}
     I, E = internal, external
@@ -160,7 +163,7 @@ def fmt(v):
 
 def render(R):
     L = [f"# Phase 1 segmentation, {R['split']} evaluation", "",
-         f"Checkpoint `{R['checkpoint']}` (epoch {R['epoch']}). Internal: {R['n_frames']} frames / "
+         f"Checkpoint `{R['checkpoint']}` (epoch {R['epoch']}, softmax temperature {R['temperature']:.3f} fit on dev). Internal: {R['n_frames']} frames / "
          f"{R['n_groups']} patients. External (EndoVis18, zero-shot): {R['external_n_frames']} frames / "
          f"{R['external_n_groups']} sequences. 95% CIs: patient/sequence-clustered bootstrap.", "",
          "## Pre-specified criteria", "", "| ID | Endpoint | Estimate [95% CI] | Criterion | Result |", "|---|---|---|---|---|"]
