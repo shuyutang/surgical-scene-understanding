@@ -1,0 +1,12 @@
+name: seg_unet_r34
+arch: unet
+encoder: resnet34
+num_classes: 32
+epochs: 60
+batch_size: 8
+lr: 3.0e-4
+weight_decay: 1.0e-4
+dice_weight: 1.0
+eval_every: 5
+workers: 12
+seed: 0
