@@ -19,6 +19,7 @@ dependencies = [
 
 [dependency-groups]
 deploy = [
+    "nvidia-cuda-nvcc-cu12==12.8.*",
     "onnx>=1.23.0",
     "onnxscript>=0.7.2",
     "tensorrt-cu12>=10.9,<11",
