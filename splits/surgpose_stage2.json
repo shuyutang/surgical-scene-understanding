@@ -1,0 +1,33 @@
+{
+ "checkpoint": "runs/kp_unet_r34_decentered_20260925-004241/best.pt",
+ "splits": {
+  "tune": {
+   "trajectories": [
+    18,
+    19,
+    20,
+    23
+   ],
+   "hash": "0ef34738c3c2c070",
+   "frames_per_eye": 4004
+  },
+  "test2": {
+   "trajectories": [
+    21,
+    22,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33
+   ],
+   "hash": "ee86807581bb2b50",
+   "frames_per_eye": 12012
+  }
+ }
+}

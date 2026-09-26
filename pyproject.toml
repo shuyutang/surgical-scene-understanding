@@ -18,6 +18,11 @@ dependencies = [
 ]
 
 [dependency-groups]
+deploy = [
+    "onnx>=1.23.0",
+    "onnxscript>=0.7.2",
+    "tensorrt-cu12>=10.9,<11",
+]
 dev = ["pytest>=8"]
 
 [tool.uv.sources]

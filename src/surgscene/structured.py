@@ -3,6 +3,8 @@
 Three estimators per instrument (5 keypoints):
   argmax    independent per-keypoint peaks (the Phase 2 baseline)
   map       continuous robust MAP under the shape prior (shape.map_fit), from Laplace observations
+  gated     per keypoint: argmax where the network is confident (conf >= tau), MAP elsewhere.
+            MAP protects against gross errors but pulls already-precise points; the gate keeps both
   discrete  exact MAP over the top-N peak candidates of every keypoint, scored by
             heatmap evidence + shape plausibility; then refined with the continuous MAP
 """
@@ -72,3 +74,8 @@ def fit_discrete(model: ShapeModel, cand, cand_conf, sigma, conf_min, beta, cauc
     Z = cand[np.arange(K), best]
     C = cand_conf[np.arange(K), best]
     return fit_map(model, Z, C, sigma, conf_min, beta, cauchy_c)
+
+
+def fit_gated(model: ShapeModel, z, conf, sigma, tau: float, conf_min: float, beta: float, cauchy_c: float):
+    m = fit_map(model, z, conf, sigma, conf_min, beta, cauchy_c)
+    return np.where((conf >= tau)[:, None], z, m)

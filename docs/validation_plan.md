@@ -133,3 +133,99 @@ hyperparameters re-selected on dev ([report](phase23_posthoc_decentered_report.m
 These are post-hoc results on a test set that had already been seen. They generate hypotheses
 and are not confirmatory. A confirmatory re-test needs fresh data, e.g. SurgPose's
 green-channel videos or new trajectories.
+
+---
+
+# Validation Plan: Stage 2 (Phases 3b–6), pre-specified 2026-09-25
+
+Committed before any stage-2 evaluation on the test2 trajectories. Everything below was selected
+on the tune trajectories only (`scripts/tune_stage2.py`, output `configs/stage2_selected.json`,
+sha256 prefix `35413a18cfe1efd5`).
+
+## Why a new split
+
+Tuning on dev (18–19) alone always concludes "the shape prior doesn't help": dev shares the
+training backgrounds, so the argmax is already near-perfect there, and the gain only appears under
+the background shift. Every stage-2 parameter needs to see that shift, so one beef (20) and one
+chicken-thigh (23) trajectory move from test into tuning.
+
+| Set | Trajectories | Frames per eye (30 fps) | Hash |
+|---|---|---|---|
+| tune | 18, 19, 20, 23 | 4,004 | `0ef34738c3c2c070` |
+| test2 | 21, 22, 24–33 | 12,012 | `ee86807581bb2b50` |
+
+**Prior exposure, stated plainly.** Every 5th left frame of the test2 trajectories was evaluated in
+Phases 2–3 (argmax/MAP errors, the confidence reliability table). The gate idea (G1–G3) was
+motivated by that reliability table, so G1–G3 on test2 are pre-specified but *not blind*. The
+temporal, 3D, hand-eye, proximity and deployment endpoints (T, S, D) have never been computed on
+these trajectories. Trajectories share tissue piles across tune and test2 (e.g. 20/21, 23/25/27),
+so tuning transfers more easily than it would to a new setup.
+
+Model under test: `runs/kp_unet_r34_decentered_20260925-004241/best.pt` (unchanged). Unit of
+analysis = trajectory (12); trajectory-clustered bootstrap, 2,000 replicates, percentile CIs.
+
+## Fix 2 (shaft line constraint) was not built
+
+The premise was that shaft-keypoint error runs *along* the shaft, so a line from the Phase 1 mask
+would constrain it. On the tune trajectories that have the shift (20, 23), the shaft error is
+mostly *perpendicular* to the instrument axis: median 45.8 px perpendicular vs 12.6 px along it
+(PSM1). Visual inspection shows the labeled shaft point sitting beside the visible shaft on these
+trajectories, a labeling-convention difference rather than a detection failure. There is also no
+video/label time offset: the best lag is 0 on every trajectory. Snapping to the mask would move
+predictions *away* from the labels. In addition, the Phase 1 segmentation model does not transfer
+to SurgPose: zero-shot it labels beef tissue as instrument and misses the dVRK jaws, so it isn't
+used anywhere in stage 2. The instrument mask for depth comes from keypoints instead.
+
+## Pipeline under test
+
+Per eye and frame: heatmap observations → **gated MAP** (argmax where conf ≥ τ, shape-prior MAP
+elsewhere). Per eye over time: **constant-velocity Kalman filter** per keypoint, measurement
+noise from the heatmap's Laplace σ and confidence, χ² innovation gate. Across eyes:
+**triangulation** (DLT + Gauss–Newton with distortion) with first-order covariance, inflated by
+one scalar κ fitted on tune (the 3D analog of temperature scaling). Proximity: signed distance
+from the 3D tip (midpoint of the two jaw tips) to a robust local tissue plane from SGM, fitted in
+disparity space.
+
+Occlusion protocol (T3/T4): every 60 frames, one random keypoint per instrument is covered for
+15 frames (0.5 s) by a tissue patch that moves with it, center offset ≤ 0.6× radius.
+
+## Endpoints and acceptance criteria
+
+| ID | Endpoint (test2) | Criterion |
+|---|---|---|
+| G1 (primary, 3b) | Gated − argmax mean keypoint error, clean left, every 5th frame | upper 95% bound < 0 |
+| G2 | Gated − argmax PCK@5 | lower bound ≥ −0.02 |
+| G3 | Gated − argmax on occluded keypoints | upper bound < 0 |
+| T1 (primary, 4) | Jitter ratio KF / gated (acceleration error vs GT, all frames) | upper bound ≤ 0.6 |
+| T2 | KF − gated mean error, clean | upper bound ≤ +0.5 px |
+| T3 | KF − gated on occluded keypoints during episodes | upper bound < 0 |
+| T4 | KF − gated in the 15 frames after an episode ends | upper bound ≤ +1.0 px |
+| S1 (R1-3D) | Mean 3D tip error, KF pipeline | upper bound ≤ 5 mm |
+| S2 | 3D tip error, KF − frame-wise (paired) | upper bound < 0 |
+| S3 | Coverage of the κ-inflated 95% ellipsoid | lower bound ≥ 0.85 and point ≤ 0.99 |
+| S4a | Hand-eye (registered from vision on each trajectory's first half, evaluated on the second half): kinematics − vision 3D jaw-pivot error | upper bound < 0 |
+| S4b | Kinematics + registration jaw-pivot error | upper bound ≤ 5 mm |
+| S5 (R4) | Alert toggles/min, (KF + 3 mm hysteresis) / frame-wise, alert at 10 mm | upper bound ≤ 0.7 |
+| E (exploratory) | Lag 0/3/6 tradeoff, "unknown" flag, NIS, depth vs lateral 3D error, distance error, alert sensitivity/specificity, GT stereo label consistency | report only |
+
+**S1 is a requirement, not a tuned threshold.** On tune it is 15.2 [9.3, 22.5] mm and is expected
+to fail. The cause is physical: tissue sits 150–230 mm from a 5.5 mm baseline, so 1 px of
+disparity error is 2–5 mm of depth. The lateral 3D error on tune is about 1 mm, and nearly all of
+the error is along the viewing ray. S4 tests the engineering answer: robot kinematics plus a
+registration fitted from the same noisy vision estimates.
+
+Exclusions: a GT stereo pair with reprojection RMS > 3 px is excluded from 3D endpoints (tune: 0.01%).
+Triangulations outside 20–2000 mm depth count as missing.
+
+## Phase 6 deployment criteria
+
+Deploy graph = uint8 BGR stereo pair (2×986×1400×3) → avg-pool resize, pad, normalize → U-Net →
+sigmoid → decode (argmax, sub-pixel, Laplace σ). Everything runs inside the engine. ONNX opset 17,
+TensorRT 10.16, static batch 2.
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| D1 | TensorRT FP32 vs PyTorch FP32 deploy graph, 200 tune frames: keypoint difference | 99th percentile ≤ 0.1 px |
+| D2 (R6) | TensorRT FP16 − PyTorch FP32 mean argmax keypoint error, test2 left every 5th frame (paired, trajectory-clustered) | upper bound ≤ +0.25 px |
+| D3 | C++ runtime reproduces the Python reference on goldens (MAP fit, Kalman filter, triangulation, engine outputs) | all parity tests pass at stated tolerances |
+| D4 (R3) | C++ end-to-end latency per stereo pair (H2D, TensorRT FP16, D2H, gated MAP ×4, Kalman, triangulation), ≥ 1,000 frames, video decode excluded and reported separately | p99 < 33 ms |
