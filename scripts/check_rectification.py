@@ -18,49 +18,18 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import yaml
 
 from surgscene.geometry import load_stereo_ini
 from surgscene.proximity import TIPS, Rectifier, disparity, instrument_mask, make_sgbm, tissue_plane
+from surgscene.rectification import load_gt, shift_rows, sift_dy  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data/surgpose/raw"
 OUT = ROOT / "runs/rectification"
 TRAJS = list(range(0, 21)) + [23]
-KP_IDS = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12]  # as in prepare_surgpose.py
 N_FRAMES = 8           # frames per trajectory for the image measure and the SGM comparison
 R_IN, R_OUT = 20, 60   # annulus, as in cache_tissue_planes.py
 R_SHAFT, R_JAW = 30, 15
-
-
-def load_gt(traj: int, eye: str, n: int) -> np.ndarray:
-    """(n, 10, 2) native px, NaN where unlabeled (same keypoint order as the frame cache)."""
-    raw = yaml.load(open(RAW / f"{traj:06d}/keypoints_{eye}.yaml"), Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
-    gt = np.full((n, len(KP_IDS), 2), np.nan)
-    for t, kps in raw.items():
-        if int(t) < n and kps:
-            for j, k in enumerate(KP_IDS):
-                if k in kps:
-                    gt[int(t), j] = kps[k]
-    return gt
-
-
-def sift_dy(sift, rl, rr):
-    ka, da = sift.detectAndCompute(cv2.cvtColor(rl, cv2.COLOR_BGR2GRAY), None)
-    kb, db = sift.detectAndCompute(cv2.cvtColor(rr, cv2.COLOR_BGR2GRAY), None)
-    if da is None or db is None:
-        return np.array([])
-    good = [m for m, n2 in cv2.BFMatcher().knnMatch(da, db, k=2) if m.distance < 0.75 * n2.distance]
-    pa = np.array([ka[m.queryIdx].pt for m in good]).reshape(-1, 2)
-    pb = np.array([kb[m.trainIdx].pt for m in good]).reshape(-1, 2)
-    ok = (pa[:, 0] - pb[:, 0] > 0) & (np.abs(pa[:, 1] - pb[:, 1]) < 8)  # positive disparity, near-epipolar
-    return (pa[ok, 1] - pb[ok, 1])
-
-
-def shift_rows(img, dy):
-    """new(y) = img(y - dy): moves content down by dy rows (sub-pixel, bilinear)."""
-    M = np.float32([[1, 0, 0], [0, 1, dy]])
-    return cv2.warpAffine(img, M, (img.shape[1], img.shape[0]), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
 
 
 def plane_stats(disp, gt_r, rect, common):

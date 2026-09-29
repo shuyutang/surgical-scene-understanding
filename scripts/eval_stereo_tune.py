@@ -14,7 +14,6 @@ Writes runs/v3_stereo_tune/{results.json, report.md}.
 """
 
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -23,12 +22,11 @@ import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from check_rectification import load_gt, shift_rows, sift_dy  # noqa: E402
 
 from surgscene.geometry import load_stereo_ini  # noqa: E402
 from surgscene.learned_stereo import CHECKPOINTS, LearnedStereo  # noqa: E402
 from surgscene.proximity import TIPS, Rectifier, disparity, instrument_mask, make_sgbm, tissue_plane  # noqa: E402
+from surgscene.rectification import load_gt, shift_rows, sift_dy  # noqa: E402
 
 RAW = ROOT / "data/surgpose/raw"
 TUNE = [18, 19, 20, 23]

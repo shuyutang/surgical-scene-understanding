@@ -12,7 +12,6 @@ Writes runs/v3_kp_vit_<split>/{results.json, report.md}.
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -21,15 +20,13 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from eval_a0 import finished, metrics, spearman  # noqa: E402
-from eval_kp import NATIVE, OCC_RADIUS, infer, occlusion_plan  # noqa: E402
-from eval_stage2 import boot  # noqa: E402
 
 from surgscene.frontend import TEST2, TUNE, load_kp_model  # noqa: E402
 from surgscene.keypoints import KeypointDataset, load_records  # noqa: E402
 from surgscene.kp_vit import DinoKeypointNet, read_at  # noqa: E402
 from surgscene.structured import observe  # noqa: E402
+from surgscene.evaluation import boot  # noqa: E402
+from surgscene.kp_eval import NATIVE, OCC_RADIUS, finished, infer, metrics, occlusion_plan, spearman  # noqa: E402
 
 UNET = {"v2 s0": "kp_unet_r34_decentered_2", "v2 s1": "kp_unet_r34_decentered_s1_"}
 CONFIG = ROOT / "configs/v3_kp_vit_selected.json"

@@ -15,20 +15,18 @@ Writes configs/tool_geometry.json.
 """
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
-import yaml
 from scipy.optimize import least_squares
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from check_rectification import RAW, load_gt  # noqa: E402
 
 from surgscene.fusion import ARMS, load_kinematics  # noqa: E402
 from surgscene.geometry import load_stereo_ini, register_rigid_robust  # noqa: E402
 from surgscene.stage2 import triangulate_seq  # noqa: E402
+from surgscene.rectification import load_gt  # noqa: E402
+from surgscene.stage2 import RAW  # noqa: E402
 
 TRAIN = range(0, 18)
 

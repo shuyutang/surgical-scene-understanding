@@ -11,7 +11,6 @@ Writes runs/deploy_vit/{parity_latency.json, report.md}.
 """
 
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -19,12 +18,11 @@ import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from eval_deploy import frames  # noqa: E402
 
 from surgscene.deploy import DeployModelVit  # noqa: E402
 from surgscene.frontend import load_vit_model  # noqa: E402
 from surgscene.trt_runner import TrtRunner  # noqa: E402
+from surgscene.video import frames  # noqa: E402
 
 DEP = ROOT / "runs/deploy_vit"
 TUNE = [18, 19, 20, 23]

@@ -123,3 +123,17 @@ def quality_proxies(img_bgr: np.ndarray) -> dict[str, float]:
         "haze": float(dark.mean()),                                                # high -> smoke / fog
         "brightness": float(hsv[..., 2].mean()),                                   # low -> underexposed
     }
+
+
+def boot(values: list[np.ndarray], n_boot=2000, seed=0):
+    """values: one array per trajectory (NaN = excluded). Mean over pooled finite entries, with a
+    trajectory-clustered bootstrap."""
+    rng = np.random.default_rng(seed)
+    sums = np.array([np.nansum(v) for v in values])
+    cnts = np.array([np.isfinite(v).sum() for v in values])
+    reps = []
+    for _ in range(n_boot):
+        i = rng.integers(0, len(values), len(values))
+        reps.append(sums[i].sum() / max(cnts[i].sum(), 1))
+    lo, hi = ci(np.asarray(reps))
+    return {"point": float(sums.sum() / cnts.sum()), "lo": float(lo), "hi": float(hi), "n": int(cnts.sum())}

@@ -21,16 +21,12 @@ Writes runs/v5_tissue/{results.json, report.md}.
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from check_rectification import shift_rows, sift_dy  # noqa: E402
-from v4_dev_fusion import causal_types, hybrid_length, load_prepared, run  # noqa: E402
 
 from surgscene.fusion import FusionParams  # noqa: E402
 from surgscene.learned_stereo import LearnedStereo  # noqa: E402
@@ -38,6 +34,8 @@ from surgscene.proximity import Rectifier, instrument_mask, tissue_plane  # noqa
 from surgscene.sam2_track import load_masks  # noqa: E402
 from surgscene.stage2 import TIP  # noqa: E402
 from surgscene.tissue_memory import TissueMemory, distances, pixel_depth, plane_depth  # noqa: E402
+from surgscene.pipeline import causal_types, hybrid_length, load_prepared, run  # noqa: E402
+from surgscene.rectification import shift_rows, sift_dy  # noqa: E402
 
 RAW = ROOT / "data/surgpose/raw"
 MASKS = ROOT / "data/cache/surgpose_masks"

@@ -17,7 +17,7 @@ import torch
 import torch.nn.functional as F
 
 from surgscene.keypoints import decode
-from surgscene.shape import ShapeModel, map_fit, umeyama
+from surgscene.shape import ShapeModel, map_fit
 
 
 @dataclass

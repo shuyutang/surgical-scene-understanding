@@ -17,45 +17,14 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from surgscene.evaluation import ci
-from surgscene.keypoints import INSTRUMENTS, KP_NAMES, KeypointDataset, load_records
+from surgscene.keypoints import INSTRUMENTS, KP_NAMES, load_records
 from surgscene.models import build_seg_model
 from surgscene.shape import ShapeModel
-from surgscene.structured import fit_discrete, fit_map, observe
-
-NATIVE = 2.0
-OCC_RADIUS = 18.0  # cache px (36 px native)
-
-
-def occlusion_plan(n: int, seed: int) -> list[list[int]]:
-    rng = np.random.default_rng(seed)
-    return [[int(rng.integers(0, 5)), 5 + int(rng.integers(0, 5))] for _ in range(n)]
-
-
-@torch.no_grad()
-def infer(model, records, occlude, cache: Path, offset: float = 0.0):
-    if cache.exists():
-        return dict(np.load(cache))
-    ds = KeypointDataset(records, occlude=occlude, occluder_radius=OCC_RADIUS, seed=1, occluder_offset=offset)
-    out = {k: [] for k in ["kp", "conf", "sigma", "cand", "cand_conf", "gt"]}
-    for x, _, kp, _ in tqdm(DataLoader(ds, 16, num_workers=8), desc=cache.stem):
-        with torch.autocast("cuda", dtype=torch.bfloat16):
-            hm = model(x.cuda()).float().sigmoid()
-        o = observe(hm)
-        for k in ["kp", "conf", "sigma", "cand", "cand_conf"]:
-            out[k].append(getattr(o, k))
-        out["gt"].append(kp.numpy())
-    out = {k: np.concatenate(v) for k, v in out.items()}
-    out["occluded"] = np.zeros(out["conf"].shape, bool)
-    if occlude is not None:
-        for i, js in enumerate(occlude):
-            out["occluded"][i, js] = True
-    np.savez_compressed(cache, **out)
-    return out
-
+from surgscene.structured import fit_discrete, fit_map
+from surgscene.kp_eval import NATIVE, infer, occlusion_plan  # noqa: E402
 
 def estimate(O, models, method, hp, plaus_max):
     n = len(O["kp"])

@@ -21,20 +21,17 @@ Writes runs/v4_<split>/{results.json, report.md}.
 import argparse
 import hashlib
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from eval_fusion import CHI2_3_95, hybrid  # noqa: E402
-from eval_stage2 import boot  # noqa: E402
-from v4_dev_fusion import causal_types, hybrid_length, load_prepared, run  # noqa: E402
 
 from surgscene.fusion import ARMS, FusionParams  # noqa: E402
 from surgscene.stage2 import SPLITS, TIP  # noqa: E402
+from surgscene.evaluation import boot  # noqa: E402
+from surgscene.pipeline import CHI2_3_95, causal_types, hybrid, hybrid_length, load_prepared, run  # noqa: E402
 
 CONFIG = ROOT / "configs/v4_selected.json"
 

@@ -18,21 +18,18 @@ Writes runs/v3_downstream_vit_<split>/{results.json, report.md}.
 
 import argparse
 import json
-import sys
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from eval_fusion import CHI2_3_95, LABEL_SD, hybrid, prepare, run_variant  # noqa: E402
-from eval_stage2 import boot  # noqa: E402
-from eval_v3c import per_trajectory  # noqa: E402
 
 from surgscene.fusion import FusionParams  # noqa: E402
-from surgscene.stage2 import SPLITS, TIP, load_rig, load_selected, shape_models, triangulate_seq  # noqa: E402
+from surgscene.stage2 import SPLITS, TIP, load_selected, shape_models, triangulate_seq  # noqa: E402
 from surgscene.temporal import KFParams, filter_keypoints  # noqa: E402
+from surgscene.evaluation import boot  # noqa: E402
+from surgscene.pipeline import CHI2_3_95, hybrid, prepare, run_variant, v3c_per_trajectory as per_trajectory  # noqa: E402
 
 VIT_OBS = ROOT / "data/cache/surgpose_obs_vit"
 CFG_C = ROOT / "configs/v3_fusion_selected.json"

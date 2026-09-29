@@ -14,97 +14,20 @@ Writes runs/v3_fusion/{results.json, report.md}.
 
 import argparse
 import json
-import sys
 from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from eval_stage2 import cached_gated  # noqa: E402
 
-from surgscene.fusion import (ARMS, FusionParams, ToolGeometry, calib_observations, fit_calibration,  # noqa: E402
-                              fuse_arm, load_kinematics, observations, pixel_std,
-                              triangulate_with_depth_prior)
-from surgscene.geometry import register_rigid_robust  # noqa: E402
-from surgscene.stage2 import TIP, load_obs, load_rig, load_selected, shape_models, triangulate_seq  # noqa: E402
-from surgscene.temporal import KFParams, filter_keypoints  # noqa: E402
+from surgscene.fusion import (ARMS, FusionParams)
+from surgscene.stage2 import TIP, load_selected, shape_models  # noqa: E402
+from surgscene.temporal import KFParams  # noqa: E402
+from surgscene.pipeline import CHI2_3_95, hybrid, prepare, run_variant  # noqa: E402
 
 TUNE = [18, 19, 20, 23]
-LABEL_SD = 0.46 / 0.6745 * 0.7071  # px per eye: median |L-R label disagreement| 0.46 px -> per-eye std
 OUT = ROOT / "runs/v3_fusion"
-
-
-def prepare(traj, models, hp, kfp):
-    O, OR = load_obs(traj, "left"), load_obs(traj, "right")
-    gL, gR = cached_gated(traj, "left", "", models, hp), cached_gated(traj, "right", "", models, hp)
-    rig = load_rig(traj)
-    f5 = np.arange(0, len(O["gt"]), 5)
-    one = np.ones((len(f5), 10))
-    G, _, rp = triangulate_seq(rig, O["gt"][f5], OR["gt"][f5], one, one)
-    G[rp > 3] = np.nan
-    kf, std, *_ = filter_keypoints(gL, O["sigma"], O["conf"], kfp)
-    kfR, stdR, *_ = filter_keypoints(gR, OR["sigma"], OR["conf"], kfp)
-    V2, _, _ = triangulate_seq(rig, kf[f5], kfR[f5], std[f5], stdR[f5])
-    # reference noise: depth std of the GT-triangulated tip midpoint, from the label disagreement
-    # between eyes (vertical residual after triangulation ~ label noise; median 0.46 px on tune)
-    Gc, Cc, _ = triangulate_seq(rig, O["gt"][f5], OR["gt"][f5], one * LABEL_SD, one * LABEL_SD)
-    ref_sd = {}
-    for arm, (a, b) in TIP.items():
-        g = (G[:, a] + G[:, b]) / 2
-        ray = g / np.linalg.norm(g, axis=1, keepdims=True)
-        C = (Cc[:, a] + Cc[:, b]) / 4
-        ref_sd[arm] = np.sqrt(np.einsum("fi,fij,fj->f", ray, C, ray))
-    return dict(O=O, OR=OR, gL=gL, gR=gR, rig=rig, f5=f5, G=G, V2=V2, kin=load_kinematics(traj), kfL=kf, kfR=kfR, std=std, stdR=stdR,
-                ref_sd=ref_sd)
-
-
-def run_variant(D, p: FusionParams, oracle=False):
-    """oracle: hand-eye registered to the GT-triangulated pivot, geometry fitted to the GT 2D labels,
-    both over the whole trajectory (not causal; diagnostic upper bound)."""
-    """-> {arm: FusionTrack}"""
-    out = {}
-    sL = pixel_std(D["O"]["sigma"], D["O"]["conf"], p)
-    sR = pixel_std(D["OR"]["sigma"], D["OR"]["conf"], p)
-    for arm, sl in ARMS.items():
-        Z, S = observations(D["gL"][:, sl], D["gR"][:, sl], sL[:, sl], sR[:, sl])
-        prior = ToolGeometry.load(arm)
-        calib = None
-        if oracle:  # calibration fitted to the GT labels over the whole trajectory (not causal)
-            k = D["kin"][arm]
-            Zg, Sg = observations(D["O"]["gt"][:, sl], D["OR"]["gt"][:, sl], np.ones((len(Z), 5)), np.ones((len(Z), 5)))
-            Zc, Sc = calib_observations(Zg, Sg)
-            f = np.arange(0, len(Z), 3)
-            piv = D["G"][:, sl][:, 2]
-            ok = np.isfinite(piv).all(1)
-            R0, t0 = register_rigid_robust(k["t"][D["f5"]][ok], piv[ok])
-            R, t, g, _ = fit_calibration(D["rig"], k["R"][f], k["t"][f], k["q"][f, 5], Zc[f], Sc[f], R0, t0,
-                                         prior, prior, fix_handeye=True)
-            calib = (R, t, g)
-        out[arm] = fuse_arm(D["rig"], D["kin"][arm], prior, Z, S, p, calib_fixed=calib)
-    return out
-
-
-def hybrid(D, tracks, sd_depth):
-    """Per tip: triangulate the v2 Kalman 2D detections with a depth prior from the fused point.
-    Falls back to the fused point where a detection is missing."""
-    out, cov = {}, {}
-    for arm, (a, b) in TIP.items():
-        X = tracks[arm].X[D["f5"]].copy()
-        C = tracks[arm].cov[D["f5"]].copy()
-        for j, kp in ((2, a), (3, b)):
-            for i, fr in enumerate(D["f5"]):
-                uL, uR = D["kfL"][fr, kp], D["kfR"][fr, kp]
-                sL, sR = D["std"][fr, kp], D["stdR"][fr, kp]
-                if np.isfinite(X[i, j]).all() and np.isfinite(uL).all() and np.isfinite(uR).all() and np.isfinite([sL, sR]).all():
-                    X[i, j], C[i, j] = triangulate_with_depth_prior(D["rig"], uL, uR, max(sL, 0.5), max(sR, 0.5),
-                                                                     X[i, j], sd_depth)
-        out[arm], cov[arm] = X, C
-    return out, cov
-
-
-CHI2_3_95 = 7.8147
 
 
 def coverage_table(data, sd_depth):

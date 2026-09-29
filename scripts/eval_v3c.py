@@ -15,89 +15,25 @@ Writes runs/v3c_<split>/{results.json, report.md}.
 import argparse
 import hashlib
 import json
-import sys
 from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from eval_fusion import CHI2_3_95, hybrid, prepare, run_variant  # noqa: E402
-from eval_stage2 import boot  # noqa: E402
 
-from surgscene.fusion import ARMS, FusionParams  # noqa: E402
-from surgscene.stage2 import SPLITS, TIP, load_selected, shape_models  # noqa: E402
+from surgscene.fusion import FusionParams  # noqa: E402
+from surgscene.stage2 import SPLITS, load_selected, shape_models  # noqa: E402
 from surgscene.temporal import KFParams  # noqa: E402
+from surgscene.evaluation import boot  # noqa: E402
+from surgscene.pipeline import SWAP_MARGIN_MM, prepare, v3c_per_trajectory as per_trajectory  # noqa: E402
 
 CONFIG = ROOT / "configs/v3_fusion_selected.json"
-SWAP_MARGIN_MM = 3.0
 LONG_JAW_MM = 15.0
 
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
-
-
-def per_trajectory(D, cfg, p):
-    tracks = run_variant(D, p)
-    Xh, Ch = hybrid(D, tracks, cfg["hybrid_sd_depth_mm"])
-    kappa = cfg["kappa"]
-    rig, f5 = D["rig"], D["f5"]
-    out = {k: [] for k in ["c1", "c2", "c3", "c4", "c5_h", "c5_v2", "c6", "v2", "hyb_post", "depth_h", "depth_v2",
-                           "lat_h", "lat_v2", "tip2d_h", "tip2d_v2"]}
-    arms = {}
-    for arm, (a, b) in TIP.items():
-        sl = ARMS[arm]
-        G = D["G"]
-        g = (G[:, a] + G[:, b]) / 2
-        X = Xh[arm]
-        h = (X[:, 2] + X[:, 3]) / 2
-        v = (D["V2"][:, a] + D["V2"][:, b]) / 2
-        filled = np.where(np.isfinite(h), h, v)
-        e_h, e_v = np.linalg.norm(filled - g, axis=1), np.linalg.norm(v - g, axis=1)
-        post = np.isfinite(h).all(1)
-        out["c1"].append(e_h)
-        out["v2"].append(e_v)
-        out["c2"].append(e_h - e_v)
-        out["hyb_post"].append(np.where(post, e_h, np.nan))
-        ray = g / np.linalg.norm(g, axis=1, keepdims=True)
-        for name, P in (("h", filled), ("v2", v)):
-            e = P - g
-            along = np.abs((e * ray).sum(1))
-            out[f"depth_{name}"].append(along)
-            out[f"lat_{name}"].append(np.sqrt(np.maximum(np.linalg.norm(e, axis=1) ** 2 - along**2, 0)))
-        # C3: kappa-inflated 95% ellipsoid, post-warm-up (the hybrid has a covariance only there)
-        S = (Ch[arm][:, 2] + Ch[arm][:, 3]) / 4
-        d2 = np.full(len(g), np.nan)
-        for i in np.flatnonzero(post & np.isfinite(g).all(1) & np.isfinite(S).all((1, 2))):
-            e = h[i] - g[i]
-            d2[i] = e @ np.linalg.solve(kappa * S[i], e)
-        out["c3"].append(np.where(np.isfinite(d2), (d2 <= CHI2_3_95).astype(float), np.nan))
-        # C4: fused jaw pivot, post-warm-up
-        piv = tracks[arm].X[f5][:, 0]
-        out["c4"].append(np.where(post, np.linalg.norm(piv - G[:, sl][:, 2], axis=1), np.nan))
-        # C5: tip swaps (individual tips closer to the other GT tip by > margin)
-        for name, A, B in (("h", X[:, 2], X[:, 3]), ("v2", D["V2"][:, a], D["V2"][:, b])):
-            straight = np.linalg.norm(A - G[:, a], axis=1) + np.linalg.norm(B - G[:, b], axis=1)
-            crossed = np.linalg.norm(A - G[:, b], axis=1) + np.linalg.norm(B - G[:, a], axis=1)
-            sw = crossed + SWAP_MARGIN_MM < straight
-            ok = np.isfinite(straight) & np.isfinite(crossed) & (post if name == "h" else True)
-            out[f"c5_{name}"].append(np.where(ok, sw.astype(float), np.nan))
-        # C6: 2D left-image tip error (px), hybrid projection vs v2 Kalman 2D, both against GT labels
-        gl = D["O"]["gt"][f5][:, [a, b]]
-        proj = np.stack([rig.left.project(np.nan_to_num(X[:, j], nan=1.0)) for j in (2, 3)], 1)
-        e2h = np.linalg.norm(proj - gl, axis=-1).mean(1)
-        e2h[~np.isfinite(X[:, 2:4]).all((1, 2))] = np.nan
-        e2v = np.linalg.norm(D["kfL"][f5][:, [a, b]] - gl, axis=-1).mean(1)
-        out["c6"].append(e2h - e2v)
-        out["tip2d_h"].append(e2h)
-        out["tip2d_v2"].append(e2v)
-        geom = tracks[arm].geom[-1] if tracks[arm].geom else None
-        arms[arm] = {"tip_offset_mm": float(np.linalg.norm(geom.tip_mid)) if geom else None,
-                     "c1": e_h, "v2": e_v, "c2": e_h - e_v,
-                     "calib_first_frame": tracks[arm].calib_time[0] if tracks[arm].calib_time else None}
-    return {k: np.concatenate(v) for k, v in out.items()}, arms
 
 
 def main():

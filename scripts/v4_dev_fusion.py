@@ -12,130 +12,21 @@ Writes runs/v4_dev/fusion_<variant>.json.
 
 import argparse
 import json
-import pickle
-import sys
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from eval_fusion import hybrid, prepare  # noqa: E402
 
-from surgscene.fusion import (ARMS, FusionParams, ToolGeometry, classify_type, fuse_arm,  # noqa: E402
-                              length_constrained_depth, observations, pixel_std, triangulate_with_depth_prior)
-from surgscene.sam2_track import load_masks  # noqa: E402
+from surgscene.fusion import (ARMS, FusionParams)
 
-MASKS = ROOT / "data/cache/surgpose_masks"
-GATE_PX = 10.0  # tip-midpoint detection farther than this outside its instrument mask: no length constraint
-from surgscene.stage2 import TIP, load_selected, shape_models  # noqa: E402
-from surgscene.temporal import KFParams  # noqa: E402
+from surgscene.stage2 import TIP  # noqa: E402
+from surgscene.pipeline import causal_types, hybrid, hybrid_length, load_prepared, mask_gate, oracle_type, run  # noqa: E402
 
 TUNE = [18, 19, 20, 23]
 OUT = ROOT / "runs/v4_dev"
 V3 = json.loads((ROOT / "configs/v3_fusion_selected.json").read_text())
-
-
-def load_prepared(traj):
-    path = OUT / f"prepared_{traj}.pkl"
-    if path.exists():
-        return pickle.loads(path.read_bytes())
-    sel = load_selected()
-    models, _ = shape_models()
-    D = prepare(traj, models, sel["gated"], KFParams(**sel["kf"]))
-    path.write_bytes(pickle.dumps(D))
-    return D
-
-
-def oracle_type(D, arm):
-    a, b = TIP[arm]
-    G = D["G"]
-    v = (G[:, a] + G[:, b]) / 2 - G[:, ARMS[arm]][:, 2]
-    return "long" if np.nanmedian(np.linalg.norm(v, axis=1)) > 15.0 else "standard"
-
-
-def run(D, p: FusionParams, types: dict | None):
-    """types: {arm: (T,) type names or None} or None (v3 behaviour)."""
-    sL = pixel_std(D["O"]["sigma"], D["O"]["conf"], p)
-    sR = pixel_std(D["OR"]["sigma"], D["OR"]["conf"], p)
-    tracks = {}
-    for arm, sl in ARMS.items():
-        Z, S = observations(D["gL"][:, sl], D["gR"][:, sl], sL[:, sl], sR[:, sl])
-        lib = {t: ToolGeometry.from_library(arm, t) for t in ("standard", "long")} if types else None
-        tracks[arm] = fuse_arm(D["rig"], D["kin"][arm], ToolGeometry.load(arm), Z, S, p,
-                               type_priors=lib, type_seq=types[arm] if types else None)
-    return tracks
-
-
-LIB = json.loads((ROOT / "configs/v4_tool_library.json").read_text())
-
-
-def causal_types(D, tracks):
-    f = D["rig"].left.K[0, 0]
-    out = {}
-    for arm, (a, b) in TIP.items():
-        piv = tracks[arm].X[:, 0]
-        uP = D["kfL"][:, ARMS[arm]][:, 2]
-        uM = (D["kfL"][:, a] + D["kfL"][:, b]) / 2
-        out[arm] = classify_type(piv, uP, uM, f)
-    return out
-
-
-def mask_gate(traj, D):
-    """{arm: (T,) bool} True where both left tip detections are within GATE_PX of their instrument's
-    mask (not the midpoint: with open jaws it sits in the gap between them, outside the mask)."""
-    import cv2
-    d = load_masks(MASKS / f"{traj:06d}_left.npz")
-    M, valid = d["masks"], d["valid"]
-    out = {}
-    for k, (arm, (a, b)) in enumerate(TIP.items()):
-        u = D["kfL"][:, [a, b]]
-        ok = np.ones(len(u), bool)
-        for fr in D["f5"]:
-            if not valid[fr] or not np.isfinite(u[fr]).all():
-                continue
-            dist = cv2.distanceTransform((~M[fr, k]).astype(np.uint8), cv2.DIST_L2, 5)
-            xy = np.clip(np.round(u[fr]).astype(int), 0, [M.shape[-1] - 1, M.shape[-2] - 1])
-            ok[fr] = bool((dist[xy[:, 1], xy[:, 0]] <= GATE_PX).all())
-        out[arm] = ok
-    return out
-
-
-def hybrid_length(D, tracks, types, sd_kin, gate=None, kin_sd_by_type=False, apply_types=("standard", "long")):
-    """v3 hybrid, but each tip's depth prior is shifted along the tip-midpoint ray by the
-    length-constrained correction (fusion.length_constrained_depth), with the type's train length
-    and length spread. types: {arm: (T,) type names or None}; None -> the v3 prior."""
-    rig, f5 = D["rig"], D["f5"]
-    out, cov = {}, {}
-    Kinv = np.linalg.inv(rig.left.K)
-    for arm, (a, b) in TIP.items():
-        X = tracks[arm].X[f5].copy()
-        C = tracks[arm].cov[f5].copy()
-        for i, fr in enumerate(f5):
-            if not np.isfinite(X[i]).all():
-                continue
-            uL, uR = D["kfL"][fr, [a, b]], D["kfR"][fr, [a, b]]
-            sL, sR = D["std"][fr, [a, b]], D["stdR"][fr, [a, b]]
-            if not (np.isfinite(uL).all() and np.isfinite(uR).all() and np.isfinite(sL).all() and np.isfinite(sR).all()):
-                continue
-            centres, sd = X[i, 2:4].copy(), sd_kin
-            typ = types[arm][fr] if types else None
-            if typ in apply_types and (gate is None or gate[arm][fr]):
-                g = LIB["types"][typ]
-                r = Kinv @ np.r_[uL.mean(0), 1.0]
-                r /= np.linalg.norm(r)
-                mid = X[i, 2:4].mean(0)
-                sd_lat = float(r @ mid) * np.hypot(*sL) / 2 / rig.left.K[0, 0]  # tip-midpoint 2D std -> mm
-                sk = g[arm]["scatter_mm_median"] if kin_sd_by_type else sd_kin
-                c, sd = length_constrained_depth(r, X[i, 0], g[arm]["tip_offset_mm"], g["length_sd_mm"], mid, sk,
-                                                 sd_lat)
-                centres = centres + (c - mid)
-            for j in range(2):
-                X[i, 2 + j], C[i, 2 + j] = triangulate_with_depth_prior(rig, uL[j], uR[j], max(sL[j], 0.5), max(sR[j], 0.5),
-                                                                        centres[j], sd)
-        out[arm], cov[arm] = X, C
-    return out, cov
 
 
 def tip_error(D, tracks, types=None, length=False, gate=None, kin_sd_by_type=False, apply_types=("standard", "long")):

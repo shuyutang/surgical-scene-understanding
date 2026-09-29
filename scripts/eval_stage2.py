@@ -17,9 +17,11 @@ from tqdm import tqdm
 
 from surgscene.evaluation import ci
 from surgscene.geometry import register_rigid_robust
-from surgscene.stage2 import (RAW, ROOT, SPLITS, TIP, framewise, load_obs, load_rig, load_selected, shape_models,
+from surgscene.stage2 import (RAW, ROOT, SPLITS, TIP, load_obs, load_rig, load_selected, shape_models,
                               triangulate_seq)
 from surgscene.temporal import KFParams, filter_keypoints, jitter
+from surgscene.evaluation import boot  # noqa: E402
+from surgscene.pipeline import cached_gated  # noqa: E402
 
 EST = ROOT / "data/cache/stage2_est"
 PLANES = ROOT / "data/cache/tissue_planes"
@@ -29,34 +31,8 @@ ALERT_MM, HYST_MM = 10.0, 3.0  # proximity alert: tip within 10 mm of the local 
 FPS = 30.0
 
 
-def boot(values: list[np.ndarray], n_boot=2000, seed=0):
-    """values: one array per trajectory (NaN = excluded). Mean over pooled finite entries, with a
-    trajectory-clustered bootstrap."""
-    rng = np.random.default_rng(seed)
-    sums = np.array([np.nansum(v) for v in values])
-    cnts = np.array([np.isfinite(v).sum() for v in values])
-    reps = []
-    for _ in range(n_boot):
-        i = rng.integers(0, len(values), len(values))
-        reps.append(sums[i].sum() / max(cnts[i].sum(), 1))
-    lo, hi = ci(np.asarray(reps))
-    return {"point": float(sums.sum() / cnts.sum()), "lo": float(lo), "hi": float(hi), "n": int(cnts.sum())}
-
-
 def err(P, gt):
     return np.linalg.norm(P - gt, axis=-1)
-
-
-def cached_gated(traj, eye, sfx, models, hp):
-    key = "_".join(f"{k}{hp[k]:g}" for k in sorted(hp))
-    path = EST / f"{traj:06d}_{eye}{sfx}_{key}.npy"
-    if path.exists():
-        return np.load(path)
-    EST.mkdir(parents=True, exist_ok=True)
-    O = load_obs(traj, eye)
-    P = framewise(O["kp" + sfx], O["conf" + sfx], O["sigma" + sfx], models, "gated", hp)
-    np.save(path, P)
-    return P
 
 
 def main():

@@ -15,13 +15,11 @@ Writes configs/stage2_selected.json and caches estimates under data/cache/stage2
 
 import itertools
 import json
-from pathlib import Path
 
 import numpy as np
 from tqdm import tqdm
 
-from surgscene.stage2 import (ROOT, TUNE, framewise, load_obs, load_rig, shape_models, tip_points,
-                              triangulate_seq)
+from surgscene.stage2 import (ROOT, TUNE, framewise, load_obs, load_rig, shape_models, triangulate_seq)
 from surgscene.temporal import KFParams, filter_keypoints
 
 EST = ROOT / "data/cache/stage2_est"

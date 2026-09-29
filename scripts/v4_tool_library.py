@@ -19,18 +19,17 @@ Writes configs/v4_tool_library.json.
 """
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from check_rectification import RAW, load_gt  # noqa: E402
 
 from surgscene.fusion import ARMS, load_kinematics  # noqa: E402
 from surgscene.geometry import load_stereo_ini, register_rigid_robust  # noqa: E402
 from surgscene.stage2 import triangulate_seq  # noqa: E402
+from surgscene.rectification import load_gt  # noqa: E402
+from surgscene.stage2 import RAW  # noqa: E402
 
 TRAIN = range(0, 18)
 LONG_MM = 15.0

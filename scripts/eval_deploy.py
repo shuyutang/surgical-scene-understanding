@@ -9,9 +9,7 @@ Kalman filter, triangulation.
 """
 
 import json
-from pathlib import Path
 
-import cv2
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -19,30 +17,15 @@ from tqdm import tqdm
 from surgscene.deploy import DeployModel
 from surgscene.evaluation import ci
 from surgscene.frontend import TEST2, TUNE, load_kp_model
-from surgscene.stage2 import RAW, ROOT, load_obs, load_rig, load_selected, shape_models, triangulate_seq
+from surgscene.stage2 import ROOT, load_obs, load_rig, load_selected, shape_models, triangulate_seq
 from surgscene.structured import fit_gated
 from surgscene.temporal import KFParams, filter_keypoints
 from surgscene.trt_runner import TrtRunner
+from surgscene.video import frames  # noqa: E402
 
 DEP = ROOT / "runs/deploy"
 GOLD = DEP / "goldens"
 CKPT = "runs/kp_unet_r34_decentered_20260925-004241/best.pt"
-
-
-def frames(traj: int, stride: int, limit: int | None = None):
-    cL = cv2.VideoCapture(str(RAW / f"{traj:06d}/regular/left_video.mp4"))
-    cR = cv2.VideoCapture(str(RAW / f"{traj:06d}/regular/right_video.mp4"))
-    t = 0
-    while True:
-        okl, fl = cL.read()
-        okr, fr = cR.read()
-        if not (okl and okr):
-            return
-        if t % stride == 0:
-            yield t, np.stack([fl, fr])
-            if limit and t // stride + 1 >= limit:
-                return
-        t += 1
 
 
 def boot_mean(vals, n_boot=2000, seed=0):

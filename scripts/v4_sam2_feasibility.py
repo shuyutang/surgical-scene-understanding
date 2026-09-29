@@ -31,7 +31,6 @@ import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
 from surgscene.keypoints import INSTRUMENTS, KP_NAMES  # noqa: E402
 from surgscene.stage2 import RAW, load_obs  # noqa: E402
 

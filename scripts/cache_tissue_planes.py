@@ -25,10 +25,10 @@ R_SHAFT, R_JAW = 30, 15     # half-res px instrument capsule radii
 
 
 def gated(traj, eye):
-    import eval_stage2
+    from surgscene.pipeline import cached_gated
     sel = load_selected()
     models, _ = shape_models()
-    return eval_stage2.cached_gated(traj, eye, "", models, sel["gated"])
+    return cached_gated(traj, eye, "", models, sel["gated"])
 
 
 def work(traj: int):
@@ -85,6 +85,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent))
     main()

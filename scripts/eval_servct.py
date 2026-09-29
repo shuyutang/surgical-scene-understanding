@@ -15,19 +15,17 @@ Writes runs/v3_servct/{results.json, report.md}.
 
 import glob
 import json
-import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-from check_rectification import shift_rows, sift_dy  # noqa: E402
 
 from surgscene.evaluation import ci  # noqa: E402
 from surgscene.learned_stereo import LearnedStereo  # noqa: E402
 from surgscene.proximity import disparity, make_sgbm  # noqa: E402
+from surgscene.rectification import shift_rows, sift_dy  # noqa: E402
 
 DATA = ROOT / "data/servct/SERV-CT"
 OUT = ROOT / "runs/v3_servct"
