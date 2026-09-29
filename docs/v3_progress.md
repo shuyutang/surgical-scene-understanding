@@ -203,3 +203,16 @@ The full account, with the test2 table, is Amendment 1 in `validation_plan.md`.
   pixels, in both specimens. A post-hoc check shows SGM's typical error is only 1–2 px: the gap is
   its 3–11% gross-error tail plus 41% missing coverage. Report: `v3b_servct_report.md`.
 - Latency is the open problem: 74–410 ms per pair in PyTorch.
+
+## Step 6 (Phase A): DINOv2 keypoints — 2026-09-28
+
+- DINOv2 ViT-S/14 plus a conv-stem decoder, with a learned log-variance head (Gaussian NLL on the
+  detached decoding error). The first training run produced NaN from a masked-NaN gradient; it's
+  fixed and has a regression test.
+- **Test2 (pre-registered in `ce2256b`):**
+  - A1 FAIL (PCK@10 −0.049) and A2 FAIL (mean +0.2 px): no 2D accuracy gain under the background
+    and label shift.
+  - A7 PASS (occluded −5.1 px).
+  - A5 PASS: the learned σ ranks errors (ρ +0.53 vs −0.25).
+  - A8 PASS: 95.2% coverage with k fitted on tune.
+- Report: `v3a_test_report.md`.
