@@ -26,6 +26,7 @@ else held fixed.
 | 3D tip, front end swapped | v2 keypoints into the Phase C fusion | DINOv2 keypoints + learned σ | 5.27 → 5.03 [3.95, 6.29] mm; difference −0.24 [−1.30, 0.65] | V1, V2, test2 | **Neither** |
 | Uncertainty inflation needed | κ = 10.5 (heatmap σ) | κ = 5.1 (learned σ) | Same coverage (0.971 vs 0.967) with half the inflation | C3, V4, test2 | **Modern** |
 | Instrument masks as a 3D measurement (v4) | Keypoints + kinematics only | SAM 2.1 masks (type ratio, shaft-width depth, visibility gate) | All three no better than without masks on train/tune; a kinematic jaw-length feature beat the mask ratio | v4 development | **Classical** |
+| Tissue under the instrument (v5 step 1) | Local plane in an annulus, current frame (Phase 5) | Temporal tissue memory with SAM 2 masks (not NeRF/3DGS) | Hidden-tissue proxy 2.54 → 1.28 mm; distance error still dominated by the tip (5.35 mm) | tune, development | **Memory** (simple, temporal) |
 | Instrument tip depth (v5 step 0) | Kinematic fusion | RAFT-Stereo on jaw pixels (zero-shot) | Even read at GT pixels: tips 12–17 mm median vs kinematics 4.8 mm; jaw disparity bleeds to the tissue behind | tune, development | **Classical** |
 | Long-jaw tip depth (v4) | v3 rigid tool model | Jaw-length constraint (geometric, classical) | Arms classified long −2.15 [−5.34, 1.03] mm (1 misclassified); mean 5.27 → 4.82 mm | M1, M2, test2 (4th) | **Neither** (primary fails) |
 
