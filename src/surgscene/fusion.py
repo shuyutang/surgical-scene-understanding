@@ -153,6 +153,17 @@ def fit_calibration(rig: StereoRig, Rk: np.ndarray, tk: np.ndarray, q5: np.ndarr
     return R, t, out, rms
 
 
+def _robust_mean(X: np.ndarray, iters: int = 10) -> np.ndarray:
+    """Cauchy-IRLS mean of (N, 3) points (scale from the MAD of the distances to the current mean)."""
+    m = np.median(X, 0)
+    for _ in range(iters):
+        r = np.linalg.norm(X - m, axis=1)
+        s = 1.4826 * np.median(r) + 1e-6
+        w = 1 / (1 + (r / (2 * s)) ** 2)
+        m = (w[:, None] * X).sum(0) / w.sum()
+    return m
+
+
 def calib_observations(Z: np.ndarray, S: np.ndarray):
     """(T, 4pts, 4) in POINTS order -> (T, 3, 4) for [pivot, wrist, tip midpoint]. The midpoint of the
     two projected tips stands in for the projection of the 3D midpoint (sub-pixel at this scale)."""
@@ -176,6 +187,9 @@ class FusionParams:
     use_vision: bool = True    # False: kinematics + hand-eye only (delta = 0, h = h0)
     handeye_mode: str = "3d"   # "3d": robust rigid registration of kinematic to triangulated pivots;
                                # "reproj": joint reprojection LM with the geometry (ill-conditioned)
+    tip_mode: str = "reproj"   # tip-midpoint offset c: "reproj" = fitted with the wrist by reprojection LM;
+                               # "3d" = robust mean of per-frame triangulated tip midpoints in the tool frame
+                               # (post hoc, v3 step 4: the reprojection fit of c is depth-ill-conditioned)
     sig_ray: float | None = 0.5  # std (mm) of a pseudo-measurement delta . ray = 0: vision corrects the
                                  # kinematics laterally, depth stays with kinematics. None: unconstrained
 
@@ -226,7 +240,8 @@ def fuse_arm(rig: StereoRig, kin_arm: dict, prior: ToolGeometry, Z: np.ndarray, 
     T = len(Z)
     Rk, tk, q5 = kin_arm["R"][:T], kin_arm["t"][:T], kin_arm["q"][:T, 5]
     Zc, Sc = calib_observations(Z, S)
-    Xv = np.full((T, 3), np.nan)  # per-frame vision pivot (uses frame i only, so causal)
+    Xv = np.full((T, 3), np.nan)   # per-frame vision pivot (uses frame i only, so causal)
+    Xtm = np.full((T, 3), np.nan)  # per-frame vision tip midpoint (tip_mode "3d")
     if calib_fixed is None and p.handeye_mode == "3d":
         for i in range(T):
             z, s_ = Z[i, 0], S[i, 0]
@@ -234,6 +249,11 @@ def fuse_arm(rig: StereoRig, kin_arm: dict, prior: ToolGeometry, Z: np.ndarray, 
                 X = triangulate(rig, z[:2], z[2:], s_[0], s_[2]).X
                 if 20 <= X[2] <= 2000:
                     Xv[i] = X
+            if p.tip_mode == "3d" and np.isfinite(Z[i, 2:4]).all() and np.isfinite(S[i, 2:4]).all():
+                Xa = triangulate(rig, Z[i, 2, :2], Z[i, 2, 2:], S[i, 2, 0], S[i, 2, 2]).X
+                Xb = triangulate(rig, Z[i, 3, :2], Z[i, 3, 2:], S[i, 3, 0], S[i, 3, 2]).X
+                if 20 <= Xa[2] <= 2000 and 20 <= Xb[2] <= 2000:
+                    Xtm[i] = (Xa + Xb) / 2
     out = FusionTrack(np.full((T, 4, 3), np.nan), np.full((T, 4, 3, 3), np.nan), np.full(T, np.nan),
                       np.full((T, 3), np.nan), [], [], [])
     calib = calib_fixed
@@ -260,9 +280,19 @@ def fuse_arm(rig: StereoRig, kin_arm: dict, prior: ToolGeometry, Z: np.ndarray, 
             else:
                 init = calib
             if init is not None:
+                prior_i, pstd = prior, (4.0, 3.0, 0.3, 2.0)
+                if p.tip_mode == "3d":
+                    okm = np.isfinite(Xtm[: i + 1]).all(1)
+                    if okm.sum() >= 10:
+                        R0, t0 = init[0], init[1]
+                        c_i = np.einsum("fji,fj->fi", Rk[: i + 1][okm], (Xtm[: i + 1][okm] - t0) @ R0 - tk[: i + 1][okm])
+                        c3 = _robust_mean(c_i)
+                        prior_i = replace(prior, tip_mid=c3)
+                        init = (R0, t0, replace(init[2], tip_mid=c3))
+                        pstd = (1e-3, 3.0, 0.3, 2.0)  # c pinned at the 3D estimate; the wrist is still fitted
                 R_he, t_he, geom, rms = fit_calibration(rig, Rk[past], tk[past], q5[past], Zc[past], Sc[past],
-                                                        init[0], init[1], init[2], prior, cauchy=p.cauchy,
-                                                        fix_handeye=p.handeye_mode == "3d")
+                                                        init[0], init[1], init[2], prior_i, prior_std=pstd,
+                                                        cauchy=p.cauchy, fix_handeye=p.handeye_mode == "3d")
                 calib = (R_he, t_he, geom)
                 out.calib_time.append(i)
                 out.calib_rms.append(rms)

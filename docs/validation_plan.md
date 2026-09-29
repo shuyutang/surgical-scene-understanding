@@ -315,3 +315,67 @@ The defaults aren't on a cliff, and they were kept as set; nothing was selected 
 The per-frame parameters barely matter. The error is set by the calibration (hand-eye + tool
 geometry) and the tool model, not by the per-frame filter. The one structural choice that
 matters, constraining δ laterally, was made before the grid.
+
+## Amendment 1 to v3 Phase C (2026-09-28, POST HOC: after the pre-specified test2 run)
+
+The pre-specified run (`c1c7987`) showed no gain on long-jaw instruments. On train 17 and tune
+18/19, the tip midpoint of that tool scatters 4–6 mm in the kinematic tool frame (standard tools:
+about 1 mm). Kinematics is less precise at 24 mm from the pivot, so the rigid model's oracle floor
+is 3.7–6.7 mm.
+
+The fitted tip offset c was also estimated by 2D reprojection, the fit that proved
+depth-ill-conditioned for the hand-eye. A variant estimating c as a robust mean of per-frame
+triangulated tip midpoints in the tool frame (`tip_mode="3d"`,
+`configs/v3_fusion_posthoc_tip3d.json`) was mixed on tune: 18: 10.4 → 6.1, 19: 6.5 → 10.4,
+20: 7.1 → 4.4, 23: 2.7 → 3.2 mm. Its only justification is consistency with the hand-eye.
+
+It was run on test2 **after** the pre-specified run, so everything below is exploratory:
+
+| test2 | Pre-specified | Post hoc (c in 3D) |
+|---|---|---|
+| C1 mean 3D tip error | 5.27 [3.56, 7.43] | 4.17 [2.97, 5.84] |
+| C2 vs v2 | −4.78 [−6.93, −2.71] | −5.88 [−7.92, −3.96] |
+| C3 coverage (same κ) | 0.971 | 0.977 |
+| Long-jaw subgroup (hybrid / v2) | 12.31 / 11.81 (4 arm-trajectories) | 8.42 / 15.24 (5) |
+| Standard subgroup | 3.86 | 3.06 |
+
+The variant improves 10 of 12 trajectories. Even so, C1's upper bound stays above 5 mm. The
+hypothesis for a future confirmatory test is: `tip_mode="3d"` reduces 3D tip error, especially on
+long-jaw instruments. It needs data neither tune nor test2 has seen. The frozen v3 config is unchanged.
+A re-run of the frozen config reproduced the pre-specified numbers exactly (`runs/v3c_test2_repro/`).
+
+---
+
+# Validation Plan: v3 Phase B (learned stereo on SERV-CT), pre-specified 2026-09-28
+
+Committed before any learned-stereo or SGM output is computed on SERV-CT. **SERV-CT is fresh
+data**: it hasn't been used for any choice in this project. Its disparity range (1st–99th
+percentile 34–126 px) was read from the GT files to set SGM's search range to 160 px; no method
+output was compared with the GT.
+
+**Method under test:** RAFT-Stereo (Princeton VL, MIT license), pretrained, zero-shot. The
+checkpoint was selected on SurgPose tune (18, 19, 20, 23) by lowest photometric error on tissue
+around the tips (`scripts/eval_stereo_tune.py`, `runs/v3_stereo_tune/`): **middlebury**. The tune
+proxies for SGM / middlebury were photometric error 12.56 / 12.97 (not comparable: SGM is scored
+only on its 82% valid pixels), plane scatter 5.42 / 1.54 mm, and 19 / 413 ms per pair.
+
+**Comparator:** SGM as in v2 (`proximity.make_sgbm`, block 5, numDisparities 160). Both methods
+use the B3 vertical-offset rule.
+
+**Data:** SERV-CT `Reference_CT`, 16 pairs (8 per experiment, 2 porcine specimens), 720×576.
+Valid pixels: GT disparity > 0 and not flagged in OcclusionL.
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| B1 (primary) | Mean absolute depth error (mm), learned − SGM, on pixels valid for both (paired over the 16 pairs, bootstrap) | upper 95% bound < 0 |
+| Reported | Depth MAE of each method; learned on all valid pixels; SGM coverage; bad-pixel rate (> 3 px) and disparity EPE differences; per-experiment numbers; the per-pair vertical offset | report only |
+
+**Limits, stated up front:**
+- 16 pairs from 2 specimens, so the pair-level CI overstates independence. Per-experiment numbers
+  are reported, and a result driven by one experiment will be called out.
+- Scoring only the pixels valid for both methods is conservative for the learned model: SGM
+  drops the hardest pixels.
+- Latency (B4) is reported, not tested. RAFT-Stereo at 32 iterations is far outside the 33 ms
+  budget without optimization.
+
+Script: `uv run --group stereo python scripts/eval_servct.py`, run once.

@@ -195,6 +195,7 @@ def main():
     base = FusionParams()
     variants = {"fusion": (base, False), "fusion_unconstrained": (replace(base, sig_ray=None), False),
                 "kin_only": (replace(base, use_vision=False), False),
+                "fusion_tip3d": (replace(base, tip_mode="3d"), False),
                 "oracle": (base, True),
                 "oracle_kin_only": (replace(base, use_vision=False), True)}
     if args.grid:
@@ -209,17 +210,23 @@ def main():
             variants[f"fusion_refit{re}"] = (replace(base, refit_every=re), False)
     R = {"params": asdict(base), "variants": {}}
     hyb = {f"hybrid_sd{sd:g}": sd for sd in (2.0, 5.0)}
-    for name, (p, oracle) in list(variants.items()) + [(h, (base, False)) for h in hyb]:
+    hyb3 = {"hybrid_tip3d_sd5": 5.0}
+    for name, (p, oracle) in list(variants.items()) + [(h, (base, False)) for h in hyb] + [(h, (base, False)) for h in hyb3]:
         per = {}
         he_info = {}
         for t, D in data.items():
-            if name in hyb:
+            if name in hyb3:
+                tracks = D["_tip3d_tracks"]
+                per[t] = tip_errors(D, tracks, hybrid(D, tracks, hyb3[name])[0])
+            elif name in hyb:
                 tracks = D.setdefault("_fusion_tracks", run_variant(D, base, False))
                 per[t] = tip_errors(D, tracks, hybrid(D, tracks, hyb[name])[0])
             else:
                 tracks = run_variant(D, p, oracle)
                 if name == "fusion":
                     D["_fusion_tracks"] = tracks
+                if name == "fusion_tip3d":
+                    D["_tip3d_tracks"] = tracks
                 per[t] = tip_errors(D, tracks)
             he_info[t] = {arm: {"first_fit_frame": tr.calib_time[0] if tr.calib_time else None,
                                 "last_rms_px": tr.calib_rms[-1] if tr.calib_rms else None,

@@ -25,6 +25,9 @@ deploy = [
     "tensorrt-cu12>=10.9,<11",
 ]
 dev = ["pytest>=8"]
+stereo = [
+    "opt-einsum>=3.4.0",
+]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }

@@ -128,3 +128,13 @@ def test_register_rigid_robust_ignores_outliers():
     B[:60] += rng.normal(scale=40, size=(60, 3))  # 20% gross outliers
     R2, t2 = register_rigid_robust(A, B)
     assert np.degrees(np.linalg.norm(so3_log(R2 @ R.T))) < 0.5 and np.linalg.norm(t2 - t) < 1.5
+
+
+def test_servct_valid_mask_excludes_flag_colours():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from eval_servct import valid_mask
+    gt = np.array([[10.0, 10.0, 10.0, 0.0, 10.0]])
+    occ = np.array([[[0, 0, 255], [0, 255, 255], [255, 0, 0], [30, 40, 50], [31, 40, 50]]], np.uint8)
+    assert valid_mask(gt, occ).tolist() == [[False, False, False, False, True]]

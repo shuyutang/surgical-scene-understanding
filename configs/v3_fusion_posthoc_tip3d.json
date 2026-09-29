@@ -1,0 +1,21 @@
+{
+ "note": "POST HOC (2026-09-28, after the pre-specified test2 run): tip-midpoint offset estimated in 3D (tip_mode 3d). Everything else as v3_fusion_selected.json, including kappa.",
+ "fusion": {
+  "r0": 2.0,
+  "conf_min": 0.05,
+  "min_px": 1.0,
+  "cauchy": 3.0,
+  "sig_kin": 2.0,
+  "tau": 30.0,
+  "q_h": 0.5,
+  "warmup": 30,
+  "refit_every": 15,
+  "he_max_frames": 300,
+  "use_vision": true,
+  "handeye_mode": "3d",
+  "sig_ray": 0.5,
+  "tip_mode": "3d"
+ },
+ "hybrid_sd_depth_mm": 5.0,
+ "kappa": 10.4649
+}

@@ -39,3 +39,13 @@ def test_focal_argmax_positive_exists_for_subpixel_keypoints():
     assert focal_loss(hi, target, pos_mode="threshold") >= focal_loss(logits, target, pos_mode="threshold")
     # the empty (unlabeled) channel contributes no positive
     assert focal_loss(logits, target, pos_mode="argmax").isfinite()
+
+
+def test_nll_loss_gradient_finite_with_unlabeled_keypoints():
+    from surgscene.kp_vit import nll_loss
+    hm = torch.rand(2, 3, 16, 16)
+    lv = torch.zeros(2, 3, 16, 16, requires_grad=True)
+    kp = torch.full((2, 3, 2), 5.0)
+    kp[0, 1] = float("nan")
+    nll_loss(lv, hm, kp).backward()
+    assert torch.isfinite(lv.grad).all()

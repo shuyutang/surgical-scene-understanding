@@ -103,13 +103,16 @@ def per_trajectory(D, cfg, p):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", choices=["tune", "test2"], required=True)
+    ap.add_argument("--config", type=Path, default=CONFIG, help="alternative config (post-hoc analyses only)")
+    ap.add_argument("--tag", default="", help="output suffix for post-hoc analyses")
     args = ap.parse_args()
-    cfg = json.loads(CONFIG.read_text())
+    cfg_path = args.config.resolve()
+    cfg = json.loads(cfg_path.read_text())
     p = FusionParams(**cfg["fusion"])
     sel = load_selected()
     models, _ = shape_models()
     kfp = KFParams(**sel["kf"])
-    out_dir = ROOT / "runs" / f"v3c_{args.split}"
+    out_dir = ROOT / "runs" / f"v3c_{args.split}{args.tag}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     per, sub = {}, {"long": {"c1": [], "v2": [], "c2": []}, "standard": {"c1": [], "v2": [], "c2": []}}
@@ -138,15 +141,15 @@ def main():
         ("C4", "Jaw pivot 3D error, fused (mm)", m["c4"], "UB ≤ 5.0", m["c4"]["hi"] <= 5.0),
         ("C6", "2D left tip error, hybrid − v2 (px)", m["c6"], "UB ≤ +0.5", m["c6"]["hi"] <= 0.5),
     ]
-    R = {"split": args.split, "config": cfg, "config_sha": sha(CONFIG),
+    R = {"split": args.split, "config": cfg, "config_file": str(cfg_path.relative_to(ROOT)), "config_sha": sha(cfg_path),
          "tool_geometry_sha": sha(ROOT / "configs/tool_geometry.json"), "fusion_params": asdict(p),
          "metrics": m, "subgroups": subgroups, "arm_trajectories": offsets,
          "verdicts": {e[0]: bool(e[4]) for e in ends}}
     (out_dir / "results.json").write_text(json.dumps(R, indent=1))
 
     f = lambda d, n=2: f"{d['point']:.{n}f} [{d['lo']:.{n}f}, {d['hi']:.{n}f}]"
-    L = [f"# v3 Phase C — {args.split}", "",
-         f"Config `configs/v3_fusion_selected.json` (sha256 {R['config_sha']}), tool geometry sha256 "
+    L = [f"# v3 Phase C — {args.split}{' (POST HOC: ' + args.tag + ')' if args.tag else ''}", "",
+         f"Config `{R['config_file']}` (sha256 {R['config_sha']}), tool geometry sha256 "
          f"{R['tool_geometry_sha']}. Trajectory-clustered bootstrap, 2,000 replicates.", "",
          "| ID | Endpoint | Result [95% CI] | Criterion | Verdict |", "|---|---|---|---|---|"]
     for i, name, d, crit, ok in ends:

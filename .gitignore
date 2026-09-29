@@ -7,3 +7,4 @@ __pycache__/
 *.engine
 cpp/third_party/
 cpp/build/
+third_party/

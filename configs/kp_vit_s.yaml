@@ -1,0 +1,13 @@
+name: kp_vit_s
+variant: vit_small_patch14_dinov2.lvd142m
+layers: [5, 8, 11]
+num_keypoints: 10
+epochs: 20
+batch_size: 8
+lr: 3.0e-4
+lr_backbone: 2.0e-5
+weight_decay: 1.0e-4
+nll_weight: 0.1
+eval_every: 2
+workers: 12
+seed: 0
