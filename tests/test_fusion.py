@@ -61,3 +61,36 @@ def test_depth_prior_triangulation_limits():
     eL, eR = np.linalg.norm(res[:2]), np.linalg.norm(res[2:])
     assert max(eL, eR) < 2.5 and 0.7 < eL / eR < 1.4
     assert np.sqrt(n @ C @ n) < 0.01
+
+
+def test_length_constrained_depth_recovers_depth_on_the_ray():
+    from surgscene.fusion import length_constrained_depth
+    P = np.array([5.0, 0.0, 200.0])
+    X_true = P + 25.0 * np.array([0.0, 0.6, 0.8])  # jaw pointing partly along the ray
+    r = X_true / np.linalg.norm(X_true)
+    X_kin = X_true + 8.0 * r  # kinematic prediction wrong along the ray
+    c, sd = length_constrained_depth(r, P, 25.0, 0.01, X_kin, sd_kin=100.0)
+    assert np.linalg.norm(c - X_true) < 0.05 and sd < 1.1
+    # the kinematic prior decides the root: X_true is the far intersection (the jaw points away),
+    # so a prediction on the near side selects the near one
+    c_near, _ = length_constrained_depth(r, P, 25.0, 0.01, X_kin - 40.0 * r, sd_kin=100.0)
+    assert (c_near - X_true) @ r < -10.0
+    # ray misses the sphere -> kinematic prior only
+    c2, sd2 = length_constrained_depth(r, P + np.array([60.0, 0, 0]), 25.0, 1.0, X_kin, sd_kin=5.0)
+    assert np.allclose(c2, (r @ X_kin) * r) and sd2 == 5.0
+
+
+def test_classify_type_is_causal_and_thresholded():
+    from surgscene.fusion import classify_type
+    T = 100
+    piv = np.tile([0.0, 0.0, 200.0], (T, 1))
+    piv[:10] = np.nan  # before the first calibration
+    uP = np.zeros((T, 2))
+    uM = np.zeros((T, 2))
+    f = 1000.0
+    uM[:, 0] = 60.0  # 60 px * 200 / 1000 = 12 mm: standard
+    uM[70:, 0] = 150.0  # later frames long; the running p90 flips once enough of them are seen
+    out = classify_type(piv, uP, uM, f, min_frames=30)
+    assert out[38] is None and out[39] == "standard"
+    assert out[-1] == "long"
+    assert all(t in (None, "standard") for t in out[:70])  # frame i never uses frames > i

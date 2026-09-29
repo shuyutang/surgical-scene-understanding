@@ -477,3 +477,84 @@ for latency alone: no configuration was compared on SERV-CT before this commit, 
 | Reported | `realtime` @ 4 vs `middlebury` @ 32 depth MAE (from the two runs) | report only |
 
 Script: `uv run --group stereo python scripts/eval_servct.py --checkpoint realtime --iters 4`.
+
+---
+
+# Validation Plan: v4 (jaw-length constraint for long-jaw instruments), pre-specified 2026-09-29
+
+## Prior exposure, stated plainly
+
+- **This is test2's fourth use.** It was used by v2 stage 2, by v3 Phase C (pre-specified), by
+  v3 Phase C Amendment 1 (post hoc) and by v3 step 5. All 34 trajectories have been seen.
+- **v4's direction was motivated partly by test2.** v3 Phase C showed no gain on long-jaw
+  instruments (trajectories 28 and 29, 12.3 mm), and the post-hoc amendment explored the tip
+  offset on test2. So it is known that test2 contains long-jaw instruments on 28 and 29, and that
+  v3 does badly there. The diagnosis and the method were developed on train and tune only; no v4
+  component has been computed on a test2 trajectory. SAM 2 masks were generated for test2
+  trajectories, and only label-free statistics were looked at.
+- **Consequence:** a pass here is *supportive*, not confirmatory. Confirmation needs data none of
+  this has seen.
+
+## Development (train and tune), what was tried and dropped
+
+The v4 plan proposed SAM 2 masks as a measurement. In development, none of the three mask uses
+earned a place, so **the method under test uses no masks**:
+- Instrument type from the mask (jaw length / shaft width): overlapping classes on train + tune
+  (standard up to 1.93, long from 1.86). A kinematic feature separates them perfectly.
+- Depth from the apparent shaft width: 3–15% within-trajectory noise (6–10 mm at 200 mm), and
+  the implied diameter varies 5.0–8.2 mm between trajectories. Worse than the kinematic pivot.
+- Visibility gate (length constraint off when a tip detection is > 10 px outside its mask):
+  neutral on tune (5.97 vs 5.97 mm).
+
+Diagnosis on tune: the long-jaw error is almost entirely in the pivot-to-tip vector, along the
+viewing ray (18 PSM3: fitted length 17.8 mm vs 29.2 GT). With the correct type prior it
+persists (13.5 mm), because the tip offset in the kinematic tool frame isn't rigid on long jaws:
+its deviation correlates 0.67–0.80 with the last wrist joint (cable-driven error), on train 17
+and tune 18 and 19.
+
+## Method under test
+
+`scripts/eval_v4.py`. The v3 Phase C fusion and hybrid (`configs/v3_fusion_selected.json`,
+sha256 `f409b1a40ec23b43`), unchanged except on arms classified as long-jaw:
+
+1. **Type**, causal (`fusion.classify_type`): the running 90th percentile, over frames seen so
+   far, of the lateral jaw length in mm (left-image pivot to tip-midpoint distance × fused pivot
+   depth / f). It's decided from 30 valid frames on; above 13 mm = long. The threshold sits in the
+   train gap (standard ≤ 11.1 mm, long ≥ 16.0).
+2. **Jaw-length constraint** (`fusion.length_constrained_depth`), long-type arms only. The tip
+   midpoint lies on its detected left viewing ray at the type's pivot-to-tip length L from the
+   fused pivot; of the two intersections, the one nearer the kinematic prediction is kept. Its
+   depth std is √((sd_L L)² + (d⊥ sd_lat)²)/√disc. It's combined by inverse variance with the
+   kinematic tip depth (std = the type's train tip-offset scatter), and the result becomes each
+   tip's depth prior in the v3 hybrid triangulation.
+3. Standard-type arms, undecided frames and the warm-up are exactly v3.
+
+**Frozen:**
+- `configs/v4_selected.json` (sha256 `a85ecb4d244b594f`), κ = 12.7906, fitted on tune;
+- `configs/v4_tool_library.json` (sha256 `7b9276761f1d719d`), train only; the long type rests
+  on one train trajectory (17, both arms).
+
+**Tune-informed choices (disclosed):**
+- Applying the constraint to long-type arms only. Applied to all arms, it hurt one standard
+  arm with buried tips (20/PSM1: 8.4 → 10.8 mm).
+- Using the type scatter as the kinematic sd there, instead of v3's 5 mm.
+
+## Endpoints (test2, 12 trajectories; trajectory-arm clusters for M1)
+
+| ID | Endpoint | Criterion | Tune (in-sample) |
+|---|---|---|---|
+| M1 (primary) | Arm-trajectories the causal classifier calls long: 3D tip error, v4 − v3 (paired, trajectory-arm clusters) | UB < 0 | −2.27 [−5.32, −0.02] (4 arms) |
+| M2 (R1) | Mean 3D tip error, v4, all arms | UB ≤ 5.0 mm | 5.73 [3.84, 7.11] |
+| M3 | Causal type = GT type (GT pivot-to-tip distance > 15 mm, v3's subgroup rule), fraction of arm-trajectories | ≥ 0.90 | 1.00 (8) |
+| M4 (R7) | Coverage of the κ-inflated 95% ellipsoid (post-warm-up) | LB ≥ 0.85 and point ≤ 0.99 | 0.950 (κ fitted here) |
+| M5 | 2D left tip error, v4 − v2 (non-inferiority) | UB ≤ +0.5 px | −0.30 [−1.22, 0.37] |
+| Reported | All-arm v4 − v3; long/standard subgroups; depth/lateral split; per arm-trajectory table | report only | −1.13 [−2.61, 0.00] |
+
+**Why M1 is on long-classified arms:** the method changes nothing else, so an all-arm paired
+difference is zero on most trajectories. With long-jaw tools on 2 of 12 trajectories, about 11%
+of bootstrap resamples contain neither, so its upper bound would be 0 by construction.
+**M1 has low power:** probably 4 arm-trajectories (28 and 29).
+**M2 is expected to fail:** v3 was 5.27 [3.56, 7.43], and v4 can remove at most the long-jaw
+excess.
+
+Run once, after this section is committed: `uv run python scripts/eval_v4.py --split test2`.

@@ -1,0 +1,31 @@
+{
+ "note": "v4, frozen 2026-09-29. Train-only: the type library (lengths, length spreads, kinematic scatters) and the type threshold (13 mm, in the train gap 11.1-16.0). Tune-informed (disclosed): applying the length constraint to long-type arms only, and using the type scatter as the kinematic depth sd there (on tune, all-types application hurt one standard arm with buried tips, 20/PSM1). kappa fitted on tune. Fusion and hybrid sd are v3's frozen values. Mask-based measurements were tried in development and are not part of the method (see docs/v4_report.md).",
+ "fusion": {
+  "r0": 2.0,
+  "conf_min": 0.05,
+  "min_px": 1.0,
+  "cauchy": 3.0,
+  "sig_kin": 2.0,
+  "tau": 30.0,
+  "q_h": 0.5,
+  "warmup": 30,
+  "refit_every": 15,
+  "he_max_frames": 300,
+  "use_vision": true,
+  "handeye_mode": "3d",
+  "sig_ray": 0.5
+ },
+ "hybrid_sd_depth_mm": 5.0,
+ "type_classifier": {
+  "threshold_mm": 13.0,
+  "percentile": 90,
+  "min_frames": 30
+ },
+ "library": "configs/v4_tool_library.json",
+ "kappa": 12.790576674760217,
+ "kappa_v3": 10.4649,
+ "length_constraint_types": [
+  "long"
+ ],
+ "kinematic_depth_sd": "library types[type][arm].scatter_mm_median (train tip-offset scatter)"
+}

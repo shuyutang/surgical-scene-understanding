@@ -65,6 +65,13 @@ class ToolGeometry:
         return cls(g["wrist"]["b"], g["wrist"]["L"], g["wrist"]["ax"], np.array(g["tip_mid"]),
                    np.array(g["open_dir"]), g["h_median"])
 
+    @classmethod
+    def from_library(cls, arm: str, typ: str, path: Path = ROOT / "configs/v4_tool_library.json") -> "ToolGeometry":
+        """v4: per-instrument-type geometry (scripts/v4_tool_library.py, train only)."""
+        lib = json.loads(path.read_text())
+        g, w = lib["types"][typ][arm], lib["wrist"][arm]
+        return cls(w["b"], w["L"], w["ax"], np.array(g["tip_mid"]), np.array(g["open_dir"]), g["h_median"])
+
     def local(self, q5: float, h: float) -> np.ndarray:
         """(4, 3) tool-frame points in POINTS order."""
         a = q5 + self.wrist_b
@@ -192,6 +199,7 @@ class FusionParams:
                                # (post hoc, v3 step 4: the reprojection fit of c is depth-ill-conditioned)
     sig_ray: float | None = 0.5  # std (mm) of a pseudo-measurement delta . ray = 0: vision corrects the
                                  # kinematics laterally, depth stays with kinematics. None: unconstrained
+    c_prior_sd: float = 4.0    # v4: prior std (mm) of the tip-midpoint offset around the (type) prior
 
 
 def pixel_std(sigma, conf, p: FusionParams):
@@ -234,9 +242,13 @@ class FusionTrack:
 
 
 def fuse_arm(rig: StereoRig, kin_arm: dict, prior: ToolGeometry, Z: np.ndarray, S: np.ndarray,
-             p: FusionParams, calib_fixed: tuple | None = None) -> FusionTrack:
+             p: FusionParams, calib_fixed: tuple | None = None, type_priors: dict | None = None,
+             type_seq: np.ndarray | None = None) -> FusionTrack:
     """Causal fusion for one arm. Z, S: (T, 4, 4) from `observations`. calib_fixed: (R, t, geom) used
-    throughout instead of the causal refits (diagnostics only, e.g. an oracle)."""
+    throughout instead of the causal refits (diagnostics only, e.g. an oracle).
+    v4: type_priors {type: ToolGeometry} and type_seq (T,) of type names (or None = undecided), each
+    computed from frames <= i only. At each refit the prior is type_priors[type_seq[i]] (or `prior`
+    while undecided); when the type changes, the geometry restarts from the new prior."""
     T = len(Z)
     Rk, tk, q5 = kin_arm["R"][:T], kin_arm["t"][:T], kin_arm["q"][:T, 5]
     Zc, Sc = calib_observations(Z, S)
@@ -261,7 +273,15 @@ def fuse_arm(rig: StereoRig, kin_arm: dict, prior: ToolGeometry, Z: np.ndarray, 
     q_delta = p.sig_kin**2 * (1 - rho**2)
     x = np.array([0.0, 0.0, 0.0, prior.h0])
     P = np.diag([p.sig_kin**2] * 3 + [2.0**2])
+    cur_type = None
+    base_prior = prior
     for i in range(T):
+        if type_priors is not None and type_seq is not None and type_seq[i] is not None and type_seq[i] != cur_type:
+            cur_type, prior = type_seq[i], type_priors[type_seq[i]]
+            if calib is not None and calib_fixed is None:
+                calib = (calib[0], calib[1], prior)  # restart the geometry from the new type's prior
+        elif type_seq is not None and type_seq[i] is None and cur_type is None:
+            prior = base_prior
         # --- calibration: hand-eye + tool geometry, from frames 0..i only
         if calib_fixed is None and i >= p.warmup and (calib is None or (i - out.calib_time[-1]) >= p.refit_every):
             past = np.arange(i + 1)
@@ -280,7 +300,7 @@ def fuse_arm(rig: StereoRig, kin_arm: dict, prior: ToolGeometry, Z: np.ndarray, 
             else:
                 init = calib
             if init is not None:
-                prior_i, pstd = prior, (4.0, 3.0, 0.3, 2.0)
+                prior_i, pstd = prior, (p.c_prior_sd, 3.0, 0.3, 2.0)
                 if p.tip_mode == "3d":
                     okm = np.isfinite(Xtm[: i + 1]).all(1)
                     if okm.sum() >= 10:
@@ -375,3 +395,52 @@ def triangulate_with_depth_prior(rig: StereoRig, uL: np.ndarray, uR: np.ndarray,
         if np.abs(dX).max() < 1e-6:
             break
     return X, np.linalg.inv(H)
+
+
+def length_constrained_depth(r: np.ndarray, P: np.ndarray, L: float, sd_L: float, X_kin: np.ndarray,
+                             sd_kin: float, sd_lat: float = 0.0, floor: float = 1.0):
+    """v4: depth prior for a jaw-tip midpoint from the jaw length.
+
+    The tip midpoint lies on the viewing ray s r (unit r, left camera at the origin) through its
+    2D detection, and at distance L (the instrument type's pivot-to-tip-midpoint length) from the
+    fused pivot P: |s r - P| = L, two roots; the one nearer the kinematic prediction X_kin is kept.
+    This uses the kinematics only for the pivot and for choosing the root, not the jaw orientation
+    (which carries the cable-driven wrist error on long-jaw tools). Its depth std is
+    sqrt((sd_L L)^2 + (d_perp sd_lat)^2) / sqrt(disc): the length spread, plus the detection's
+    lateral std sd_lat (mm at the tip's depth) acting through the lateral pivot-to-tip distance
+    d_perp. Both blow up when the ray grazes the sphere (jaw perpendicular to the ray). It's combined with the kinematic depth (std sd_kin) by inverse
+    variance. Returns (X_centre, sd) for triangulate_with_depth_prior, or the kinematic prior
+    alone when the ray misses the sphere."""
+    s_kin = float(r @ X_kin)
+    b = float(r @ P)
+    disc = b * b - float(P @ P) + L * L
+    if disc <= 0:
+        return s_kin * r, sd_kin
+    roots = (b - np.sqrt(disc), b + np.sqrt(disc))
+    s_sph = min(roots, key=lambda s: abs(s - s_kin))
+    d_perp = np.sqrt(max(float(P @ P) - b * b, 0.0))
+    sd_sph = max(np.hypot(sd_L * L, d_perp * sd_lat) / np.sqrt(disc), floor)
+    w_k, w_s = 1 / sd_kin**2, 1 / sd_sph**2
+    s = (w_k * s_kin + w_s * s_sph) / (w_k + w_s)
+    return s * r, float(1 / np.sqrt(w_k + w_s))
+
+
+LONG_JAW_MM = 13.0  # v4 type threshold: train standard <= 11.1 mm, long >= 16.0 (jaw length p90, first 10 s)
+
+
+def classify_type(pivot: np.ndarray, uL_pivot: np.ndarray, uL_mid: np.ndarray, f: float,
+                  min_frames: int = 30, q: float = 90.0, thresh: float = LONG_JAW_MM) -> np.ndarray:
+    """v4 causal instrument-type sequence. Per frame i: the running q-th percentile, over frames
+    <= i, of the lateral jaw length in mm (|tip midpoint - pivot| in the left image x fused pivot
+    depth / f); None until min_frames valid frames, then "long" if above thresh else "standard".
+    pivot (T, 3) fused pivot (NaN before the first calibration); uL_* (T, 2) left detections."""
+    T = len(pivot)
+    jaw = np.linalg.norm(uL_mid - uL_pivot, axis=1) * pivot[:, 2] / f
+    out = np.full(T, None, dtype=object)
+    seen = []
+    for i in range(T):
+        if np.isfinite(jaw[i]):
+            seen.append(jaw[i])
+        if len(seen) >= min_frames:
+            out[i] = "long" if np.percentile(seen, q) > thresh else "standard"
+    return out
