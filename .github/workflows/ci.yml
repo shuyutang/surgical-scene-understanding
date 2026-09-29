@@ -1,0 +1,20 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install (PyTorch CUDA wheels run on CPU for the unit tests)
+        run: uv sync -p 3.12 --group dev
+      - name: Lint
+        run: uv run ruff check src scripts tests
+      - name: Unit tests (synthetic data only)
+        run: uv run pytest -q

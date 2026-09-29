@@ -1,7 +1,7 @@
 # Practice Project v2: Instrument-Aware Surgical Scene Understanding with Structured Inference
 
 > **Status (2026-09-25):** Phases 1–6 implemented. Results and deviations from this plan are in
-> [docs/phase1-3_summary.md](docs/phase1-3_summary.md) and [docs/phase3b-6_summary.md](docs/phase3b-6_summary.md).
+> [phase1-3_summary.md](../phase1-3_summary.md) and [phase3b-6_summary.md](../phase3b-6_summary.md).
 
 ## What changed from v1
 

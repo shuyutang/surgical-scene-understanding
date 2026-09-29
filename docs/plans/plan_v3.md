@@ -1,8 +1,8 @@
 # Practice Project v3: Foundation Features + Kinematics-Fused 3D Tool State
 
 > **Status (2026-09-27):** plan only; nothing built. v2 (Phases 1–6) is complete at `0ca0675`:
-> [v2 plan](project_plan_v2.md),
-> [Phases 1–3 summary](docs/phase1-3_summary.md), [Phases 3b–6 summary](docs/phase3b-6_summary.md).
+> [v2 plan](plan_v2.md),
+> [Phases 1–3 summary](../phase1-3_summary.md), [Phases 3b–6 summary](../phase3b-6_summary.md).
 
 ## Why v3, and why not the whole "SOTA diagram"
 

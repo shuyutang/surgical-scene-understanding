@@ -1,7 +1,9 @@
 [project]
 name = "surgscene"
 version = "0.1.0"
-description = "Instrument-aware surgical scene understanding with structured inference (practice project)"
+description = "3D surgical instrument tracking and tool-tissue proximity from stereo video and robot kinematics"
+license = "MIT"
+readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "torch==2.8.*",
@@ -24,7 +26,10 @@ deploy = [
     "onnxscript>=0.7.2",
     "tensorrt-cu12>=10.9,<11",
 ]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.13",
+]
 sam = [
     "accelerate>=1.15.0",
     "transformers>=4.56",

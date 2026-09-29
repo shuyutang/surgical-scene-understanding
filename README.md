@@ -1,82 +1,129 @@
-# Surgical scene understanding with structured inference
+# Surgical scene understanding: 3D instrument tracking and tool–tissue proximity
 
-A practice project in surgical perception. The plan is in
-[project_plan_v2.md](project_plan_v2.md).
-The next iteration (foundation backbone, learned stereo, kinematics-fused factor graph) is planned in
-[project_plan_v3.md](project_plan_v3.md). v4 (SAM 2 masks as a measurement, then a jaw-length constraint for long-jaw tools): [plan](project_plan_v4.md), [report](docs/v4_report.md), [step 0](docs/v4_step0_sam2_feasibility.md).
-Pre-specified acceptance criteria are in [docs/validation_plan.md](docs/validation_plan.md).
+A perception pipeline for robotic-surgery stereo video that locates surgical instrument tips in 3D
+and estimates their distance to tissue, built and evaluated on public data. It compares modern
+learned components (foundation-model backbones, learned stereo, SAM 2) with classical estimation
+(shape priors, Kalman filtering, fusion of the robot's own kinematics) one component at a time.
 
-| Phase | What | Data | Status |
-|---|---|---|---|
-| 1 | Dense segmentation (32 classes) + evaluation harness | SISVSE (train/test), EndoVis18 (zero-shot) | done: [report](docs/phase1_test_report.md) |
-| 2 | Instrument keypoint heatmaps | SurgPose | done (K1 fails: background shift) |
-| 3 | Shape prior + robust MAP (continuous LM, discrete candidates) | SurgPose | done: [pre-specified](docs/phase23_test_report.md), [post hoc](docs/phase23_posthoc_decentered_report.md), [summary](docs/phase1-3_summary.md) |
-| 3b | Gated MAP (argmax when confident, MAP otherwise) | SurgPose, stage-2 split | done: gate keeps precision, gain not significant ([report](docs/stage2_test_report.md)) |
-| 4 | Per-keypoint Kalman filter, fixed-lag smoother | SurgPose 30 fps | done: jitter −68%, occlusion −1.9 px |
-| 5 | Stereo triangulation + covariance, SO(3), hand-eye from kinematics, SGM tissue proximity | SurgPose stereo + dVRK kinematics | done: 3D tip 10 mm (5 mm requirement fails: baseline physics); kinematics + registration 4.1 mm |
-| 6 | Deploy graph → ONNX → TensorRT FP16, C++ runtime + parity tests | | done: FP16 non-inferior, p99 2.6 ms per stereo pair ([report](docs/phase6_deploy_report.md)) |
+**Every test is specified in writing and committed before it runs**
+([validation plan](docs/validation_plan.md)), and failures are reported as failures.
 
-Summaries: [Phases 1–3](docs/phase1-3_summary.md), [Phases 3b–6](docs/phase3b-6_summary.md). Component-by-component comparison: [conventional vs modern](docs/conventional_vs_modern.md).
+## Headline results
+
+Target use case: a tool-to-tissue proximity alert. Requirements: 3D tip error ≤ 5 mm (R1), end-to-end
+p99 latency < 33 ms (R3), calibrated uncertainty (R7). Full requirement → test → result mapping:
+[docs/traceability.md](docs/traceability.md).
+
+| Stage | Method | Key result (95% CI) |
+|---|---|---|
+| v2 | U-Net keypoints, shape prior + robust MAP, Kalman filter, stereo triangulation | 3D tip error 10.0 [7.6, 12.8] mm: stereo depth fails with a 6 mm baseline |
+| v3 C | + causal fusion of dVRK kinematics (online hand-eye, iterated EKF) | 5.27 [3.56, 7.43] mm (−4.8 mm vs v2); 3.9 mm on standard instruments |
+| v3 A | DINOv2 ViT-S keypoints with a learned uncertainty head | No clean-frame gain; −5.1 px on occluded keypoints; post-hoc uncertainty inflation halved |
+| v3 B | RAFT-Stereo vs SGM, tissue depth (SERV-CT, CT ground truth) | 17.1 → 1.6 mm (1.9 mm at 10.7 ms) |
+| v4 | Jaw-length constraint for long-jaw instruments (SAM 2 masks tried, dropped) | 4.82 [3.63, 6.21] mm; primary endpoint failed (one misclassified arm) |
+| v5 | Occlusion-aware tissue memory (development) | Hidden-tissue depth 2.54 → 1.28 mm vs a local plane; tip error still dominates distance |
+| Deploy | ONNX → TensorRT FP16, C++ runtime | U-Net path p99 2.6 ms end to end (without stereo); DINOv2 engine 4.4 ms, +0.08 px from FP16 |
+
+Summary of what worked, component by component: [docs/conventional_vs_modern.md](docs/conventional_vs_modern.md).
+Learned models won on stereo matching, occlusion and uncertainty; the largest 3D gain came from
+fusing the robot's kinematics. **R1 is not met overall**; the evaluation set has been used four times
+(disclosed in each pre-registration), so further claims need fresh data.
+
+## Pipeline
+
+```
+ stereo video ──► keypoint network (U-Net / DINOv2) ──► shape prior + MAP ──► Kalman filter (2D) ─┐
+      │                                                                                           ├─► 3D tips + covariance
+      │          robot kinematics ──► online hand-eye + tool geometry ──► iterated EKF ───────────┘        │
+      │                                                                                                    ▼
+      └────────► learned stereo (RAFT) ──► tissue memory (instrument masks: SAM 2) ──────────► tip-to-tissue distance, alert
+```
 
 ## Setup
 
 ```bash
-uv sync -p 3.12
-# datasets under data/ (gitignored); see the plan's Data section for sources
-uv run python scripts/prepare_seg_data.py      # SISVSE + EndoVis18 caches, frozen patient split
-uv run python scripts/prepare_surgpose.py      # SurgPose frame cache, frozen trajectory split
-uv run --group dev pytest
+uv sync -p 3.12                       # Python 3.12, PyTorch 2.8 (CUDA 12.8 wheels)
+uv run --group dev pytest             # 44 unit tests; no data needed
 ```
 
-## Phase 1
+Optional dependency groups: `stereo` (RAFT-Stereo), `sam` (SAM 2 via transformers), `deploy`
+(TensorRT, ONNX). RAFT-Stereo code and weights are fetched into `third_party/` (gitignored):
 
 ```bash
+git clone https://github.com/princeton-vl/RAFT-Stereo third_party/RAFT-Stereo
+(cd third_party/RAFT-Stereo && bash download_models.sh)
+```
+
+### Data
+
+Nothing is redistributed here; datasets go under `data/` (gitignored). Check each dataset's own
+terms before use.
+
+| Dataset | Used for | Source | Terms |
+|---|---|---|---|
+| SurgPose | Keypoints, stereo, dVRK kinematics (main dataset) | Zenodo record 15278516 | CC BY 4.0 |
+| SISVSE | Semantic segmentation (Phase 1) | MICCAI 2022 SISVSE release | see the dataset's terms |
+| EndoVis 2018 Robotic Scene Segmentation | Zero-shot segmentation test | HF mirror `BeileiCui/EndoVis18` | challenge terms |
+| SERV-CT | Stereo depth accuracy (CT ground truth) | SERV-CT release | CC BY-NC-SA 4.0 (non-commercial) |
+
+Pretrained models: DINOv2 (Apache 2.0, via `timm`), SAM 2.1 (Apache 2.0, via `transformers`),
+RAFT-Stereo (MIT). TensorRT is installed from NVIDIA's pip wheels under NVIDIA's license.
+
+Frozen split manifests (with hashes) are committed in `splits/`.
+
+## Reproducing
+
+Scripts are indexed in [scripts/README.md](scripts/README.md) and documents in
+[docs/README.md](docs/README.md). Test-set commands are marked *once*: they were run a single time,
+after the matching pre-registration was committed.
+
+```bash
+# data caches
+uv run python scripts/prepare_seg_data.py && uv run python scripts/prepare_surgpose.py
+
+# v2: segmentation, keypoints, structured inference, temporal, stereo
 uv run python scripts/train_seg.py configs/seg_unet_r34.yaml
-uv run python scripts/calibrate_seg.py runs/<run>/best.pt           # temperature on dev
-uv run python scripts/eval_seg.py runs/<run>/best.pt --split dev    # tuning
-uv run python scripts/eval_seg.py runs/<run>/best.pt --split test   # once, frozen
-```
-
-## Phases 2–3
-
-```bash
 uv run python scripts/train_kp.py configs/kp_unet_r34_decentered.yaml
-uv run python scripts/eval_kp.py runs/<run>/best.pt --occluder-offset 0.6
-```
+uv run python scripts/cache_stage2_obs.py runs/<kp_run>/best.pt
+uv run python scripts/tune_stage2.py && uv run python scripts/cache_tissue_planes.py
+uv run python scripts/eval_stage2.py --split tune            # --split test2: once
 
-## Stage 2 (Phases 3b–5)
+# v3: kinematics fusion (C), learned stereo (B), DINOv2 keypoints (A)
+uv run python scripts/fit_tool_geometry.py
+uv run python scripts/eval_v3c.py --split tune               # --split test2: once
+uv run --group stereo python scripts/eval_stereo_tune.py && uv run --group stereo python scripts/eval_servct.py
+uv run python scripts/train_kp_vit.py configs/kp_vit_s.yaml
+uv run python scripts/eval_kp_vit.py --split tune            # --split test2: once
 
-```bash
-uv run python scripts/cache_stage2_obs.py runs/<kp_run>/best.pt   # full-rate observations, both eyes
-uv run python scripts/tune_stage2.py                              # all parameters, tune split only
-uv run python scripts/cache_tissue_planes.py                      # SGM tissue planes
-uv run python scripts/eval_stage2.py --split tune                 # sanity
-uv run python scripts/eval_stage2.py --split test2                # once, pre-specified
-```
+# v4: SAM 2 masks, instrument-type library, jaw-length constraint
+uv run --group sam python scripts/v4_make_masks.py && uv run python scripts/v4_mask_qa.py
+uv run python scripts/v4_tool_library.py
+uv run python scripts/eval_v4.py --split tune                # --split test2: once
 
-## Phase 6 (TensorRT + C++)
+# v5 (development, tune only): stereo on instruments, tissue memory
+uv run --group stereo --group sam python scripts/v5_tissue_memory.py
 
-```bash
-uv sync --group deploy && cpp/scripts/fetch_deps.sh               # TensorRT/CUDA from wheels, TRT headers from OSS
+# deployment: TensorRT FP16 engines, C++ runtime and latency benchmark
+uv sync --group deploy && cpp/scripts/fetch_deps.sh
 uv run --group deploy python scripts/export_trt.py runs/<kp_run>/best.pt
-uv run --group deploy python scripts/eval_deploy.py               # D1, D2, goldens for C++
+uv run --group deploy python scripts/eval_deploy.py
 cmake -S cpp -B cpp/build && cmake --build cpp/build -j && cpp/build/tests
-uv run python scripts/prepare_cpp_bench.py
-cpp/build/bench runs/deploy/kp_stereo_fp16.engine runs/deploy/goldens runs/deploy/bench_frames.u8 100 2000 6.86 runs/deploy/bench.csv
 ```
 
 ## Layout
 
-- `src/surgscene/taxonomy.py`: class lists, harmonized `{tip, wrist, shaft}` mapping
-- `src/surgscene/evaluation.py`: per-frame sufficient statistics, patient-clustered bootstrap, image-condition proxies
-- `src/surgscene/keypoints.py`: heatmap dataset/targets/focal loss/sub-pixel decode, occluder augmentation
-- `src/surgscene/shape.py`: Umeyama, generalized Procrustes, PCA shape model, hand-written robust LM MAP
-- `src/surgscene/structured.py`: heatmap → Laplace observations, top-N candidates, discrete candidate MAP
-- `src/surgscene/temporal.py`: Kalman filter, fixed-lag smoother, jitter metric
-- `src/surgscene/geometry.py`: distortion, triangulation with covariance, SO(3), rigid transforms, robust registration
-- `src/surgscene/proximity.py`: rectification, SGM, disparity-space tissue plane, keypoint instrument mask
-- `src/surgscene/stage2.py`, `frontend.py`: stage-2 split and pipeline glue
-- `src/surgscene/deploy.py`, `trt_runner.py`: exportable graph, TensorRT build/run
-- `cpp/`: C++ runtime (TensorRT engine, Eigen MAP solver, Kalman, stereo), GoogleTest parity tests, latency bench
-- `splits/`: frozen split manifests with hashes (committed; data is not)
-- `docs/`: validation plan, test reports
+- `src/surgscene/`: the library
+  - perception: `models`, `keypoints`, `kp_vit`, `learned_stereo`, `sam2_track`
+  - structured inference and estimation: `shape`, `structured`, `temporal`, `geometry`, `fusion`
+  - tissue and proximity: `proximity`, `tissue_memory`
+  - evaluated pipelines and evaluation: `pipeline`, `stage2`, `evaluation`, `kp_eval`
+  - deployment: `deploy`, `trt_runner`
+- `scripts/`: data preparation, training, evaluation, export ([index](scripts/README.md))
+- `configs/`: training configs and frozen, hashed evaluation configs
+- `cpp/`: C++ runtime (TensorRT engine, Eigen MAP solver, Kalman filter, stereo), GoogleTest parity tests, latency bench
+- `docs/`: validation plan, pre-specified test reports, plans and summaries ([index](docs/README.md))
+- `splits/`: frozen split manifests
+
+## License
+
+Code: MIT (see [LICENSE](LICENSE)). Datasets and pretrained weights keep their own licenses (above).

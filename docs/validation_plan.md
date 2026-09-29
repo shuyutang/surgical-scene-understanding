@@ -235,7 +235,7 @@ TensorRT 10.16, static batch 2.
 # Validation Plan: v3 Phase C (kinematics-fused 3D tool state), pre-specified 2026-09-28
 
 Committed before any v3 number is computed on the test2 trajectories. Plan:
-[v3 plan](../project_plan_v3.md). Development record:
+[v3 plan](plans/plan_v3.md). Development record:
 [v3_progress.md](v3_progress.md). All design choices were made on train (0–17: tool geometry
 priors) and tune (18, 19, 20, 23: everything else).
 

@@ -1,6 +1,6 @@
 # v3 progress (exploratory, train + tune data only)
 
-Plan: [project_plan_v3.md](../project_plan_v3.md).
+Plan: [plans/plan_v3.md](plans/plan_v3.md).
 Nothing here touches test2. These are development results, used to fix design rules before the
 v3 endpoints are pre-registered.
 
