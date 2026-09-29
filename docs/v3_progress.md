@@ -171,3 +171,13 @@ number above.
 - C4 (jaw pivot) uses the fused pivot.
 - Add an endpoint: 2D left-image tip error, hybrid vs v2 (non-inferiority), so the depth gain
   can't hide a lateral loss.
+
+## Step 3 on test2 (pre-registered, `e0e379a`) — 2026-09-28
+
+See [v3c_test_report.md](v3c_test_report.md).
+- C1 **FAIL**: 5.27 [3.56, 7.43] mm.
+- C2 PASS: −4.78 mm against v2's 10.05.
+- C3 PASS: coverage 0.971.
+- C4 PASS: pivot 3.38 mm.
+- C6 PASS: 2D non-inferior.
+- Standard instruments: 3.86 [3.04, 4.84] mm. Long-jaw (28, 29): no gain over v2.
