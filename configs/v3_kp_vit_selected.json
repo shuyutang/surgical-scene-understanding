@@ -1,0 +1,6 @@
+{
+ "note": "v3 Phase A, frozen 2026-09-28 from tune only. Model under test = seed 0 (seed 1 reported for variability). learned_sigma_scale k fitted on tune (seed 0): 95% of clean tune errors within 2.4477 * k * sigma_learned.",
+ "model_run": "kp_vit_s_20260928-175301",
+ "baseline_run": "kp_unet_r34_decentered_20260925-004241",
+ "learned_sigma_scale": 6.086
+}

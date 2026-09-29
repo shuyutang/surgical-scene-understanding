@@ -379,3 +379,44 @@ Valid pixels: GT disparity > 0 and not flagged in OcclusionL.
   budget without optimization.
 
 Script: `uv run --group stereo python scripts/eval_servct.py`, run once.
+
+---
+
+# Validation Plan: v3 Phase A (DINOv2 keypoint network), pre-specified 2026-09-28
+
+Committed before the Phase A model is evaluated on any test2 trajectory. Training used train
+(0–17) with dev (18–19) for checkpoint selection. Evaluation choices used tune (18, 19, 20, 23):
+`scripts/eval_kp_vit.py --split tune`, `runs/v3_kp_vit_tune/`.
+
+**Prior exposure:** test2's left frames (every 5th, clean and occluded) were used in the Phase 2–3
+evaluation and in the stage-2 D2 check of the v2 network. The Phase A network has never been run
+on them.
+
+**Model under test:**
+- DINOv2 ViT-S/14 (timm, fine-tuned), with a conv stem and a U-Net decoder;
+- a learned per-keypoint log-variance head, trained by Gaussian NLL on the detached decoding error;
+- focal loss with argmax positives (A0);
+- the same data, augmentation and 20-epoch schedule as v2.
+
+The seed-0 run (`kp_vit_s_20260928-175301`) is under test, against the v2 seed-0 U-Net
+(`kp_unet_r34_decentered_20260925-004241`). The seed-1 runs of both are reported for variability.
+Config: `configs/v3_kp_vit_selected.json`; learned-σ scale k = 6.086, fitted on tune.
+
+**Data:** test2 (21, 22, 24–33), left eye, every 5th frame from the frame cache. Clean frames, plus the v2
+de-centered occluder protocol (seed 7, offset 0.6). Unit of analysis = trajectory.
+Trajectory-clustered bootstrap, 2,000 replicates.
+
+| ID | Endpoint (test2) | Criterion | Tune (in-sample) |
+|---|---|---|---|
+| A1 (primary, as in the v3 plan) | PCK@10, DINOv2 − v2, clean | lower 95% bound > 0 | −0.038 [−0.081, 0.005]: expected to fail |
+| A2 | Mean error, DINOv2 − v2, clean | upper bound < 0 | +0.17 [−0.94, 2.05] |
+| A7 | Occluded keypoints: mean error, DINOv2 − v2 | upper bound < 0 | −3.21 [−4.72, −0.86] |
+| A5 | Spearman(σ, error): learned σ vs v2 Laplace σ | learned > Laplace (point) | +0.66 vs −0.20 |
+| A8 | Coverage of the 95% radius, 2.4477 · k · learned σ | lower bound ≥ 0.85 and point ≤ 0.99 | 0.950 (k fitted here) |
+| Reported | Median, PCK@5, per-trajectory errors, seed-1 runs | report only | |
+
+A1 stays primary because the plan fixed it before any Phase A result. On tune, the DINOv2 model is
+sharper on the in-domain trajectories (18, 19) but not better on the shifted, label-convention
+trajectories (20, 23). A1 is therefore expected to fail. The plan's A4 (mask head) wasn't built,
+per its cut list. Downstream use of the new keypoints (Phase C with Phase A inputs) isn't part of
+this test.

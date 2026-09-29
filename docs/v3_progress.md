@@ -181,3 +181,25 @@ See [v3c_test_report.md](v3c_test_report.md).
 - C4 PASS: pivot 3.38 mm.
 - C6 PASS: 2D non-inferior.
 - Standard instruments: 3.86 [3.04, 4.84] mm. Long-jaw (28, 29): no gain over v2.
+
+## Step 4: long-jaw instruments (post hoc) — 2026-09-28
+
+The full account, with the test2 table, is Amendment 1 in `validation_plan.md`.
+- **Where the error comes from.** On the long-jaw tool (train 17, tune 18/19) the tip midpoint
+  scatters 4–6 mm in the kinematic tool frame, against about 1 mm for standard tools, and jaw
+  opening or wrist joints don't explain it. So kinematics is less precise at 24 mm from the pivot:
+  the rigid model's oracle floor is 3.7–6.7 mm.
+- **Tip offset estimated in 3D** (`tip_mode="3d"`) instead of by reprojection: mixed on tune
+  (two better, two worse). On test2 it's better (C1 5.27 → 4.17 mm; long-jaw 12.3 → 8.4), but that
+  run is post hoc and left as a hypothesis for fresh data. The frozen config is unchanged and
+  reproduces exactly.
+- The deeper limit is that the keypoint network has seen this tool on 1 of 18 training trajectories.
+
+## Step 5 (Phase B): learned stereo — 2026-09-28
+
+- RAFT-Stereo (zero-shot), checkpoint chosen on SurgPose tune proxies (`middlebury`). Tune: plane
+  scatter 5.4 → 1.5 mm; photometric error not separable.
+- **B1 on SERV-CT (fresh, pre-registered in `16fd1d3`): PASS.** Depth MAE 17.1 → 1.6 mm on common
+  pixels, in both specimens. A post-hoc check shows SGM's typical error is only 1–2 px: the gap is
+  its 3–11% gross-error tail plus 41% missing coverage. Report: `v3b_servct_report.md`.
+- Latency is the open problem: 74–410 ms per pair in PyTorch.
