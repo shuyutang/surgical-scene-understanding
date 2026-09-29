@@ -20,13 +20,15 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import least_squares
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.fusion import ARMS, load_kinematics
+from surgscene.geometry import load_stereo_ini, register_rigid_robust
+from surgscene.rectification import load_gt
+from surgscene.stage2 import (
+    RAW,
+    triangulate_seq,
+)
 
-from surgscene.fusion import ARMS, load_kinematics  # noqa: E402
-from surgscene.geometry import load_stereo_ini, register_rigid_robust  # noqa: E402
-from surgscene.stage2 import triangulate_seq  # noqa: E402
-from surgscene.rectification import load_gt  # noqa: E402
-from surgscene.stage2 import RAW  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 TRAIN = range(0, 18)
 

@@ -135,7 +135,6 @@ def map_fit(model: ShapeModel, z: np.ndarray, sigma: np.ndarray, w: np.ndarray, 
     p = init_params(model, z, w) if p0 is None else p0.copy()
     if p is None:
         return None
-    m = len(model.lam)
     prior_prec = np.concatenate([np.zeros(4), beta / model.lam])
 
     def energy(p):

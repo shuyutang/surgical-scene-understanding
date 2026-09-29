@@ -26,12 +26,12 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.evaluation import boot
+from surgscene.fusion import ARMS, FusionParams
+from surgscene.pipeline import CHI2_3_95, causal_types, hybrid, hybrid_length, load_prepared, run
+from surgscene.stage2 import SPLITS, TIP
 
-from surgscene.fusion import ARMS, FusionParams  # noqa: E402
-from surgscene.stage2 import SPLITS, TIP  # noqa: E402
-from surgscene.evaluation import boot  # noqa: E402
-from surgscene.pipeline import CHI2_3_95, causal_types, hybrid, hybrid_length, load_prepared, run  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 CONFIG = ROOT / "configs/v4_selected.json"
 
@@ -56,7 +56,7 @@ def per_trajectory(D, cfg):
                            apply_types=tuple(cfg["length_constraint_types"]))
     rig, f5 = D["rig"], D["f5"]
     out = {k: [] for k in ["m1", "v4", "v3", "d2", "depth_v4", "depth_v3", "tip2d_v4", "tip2d_v2", "m5", "lat_v4"]}
-    arms, d2s = {}, []
+    arms = {}
     for arm, (a, b) in TIP.items():
         g = (D["G"][:, a] + D["G"][:, b]) / 2
         v2 = (D["V2"][:, a] + D["V2"][:, b]) / 2

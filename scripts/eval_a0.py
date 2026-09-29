@@ -14,11 +14,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.frontend import TUNE, load_kp_model
+from surgscene.keypoints import load_records
+from surgscene.kp_eval import finished, infer, metrics, occlusion_plan
 
-from surgscene.frontend import TUNE, load_kp_model  # noqa: E402
-from surgscene.keypoints import load_records  # noqa: E402
-from surgscene.kp_eval import finished, infer, metrics, occlusion_plan  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 OUT = ROOT / "runs/v3_a0"
 RUNS = {  # label -> run name prefix (newest match is used)

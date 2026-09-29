@@ -10,7 +10,6 @@ import yaml
 
 from .stage2 import RAW
 
-
 KP_IDS = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12]  # as in prepare_surgpose.py
 
 

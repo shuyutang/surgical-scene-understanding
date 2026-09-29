@@ -23,6 +23,7 @@ import numpy as np
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
 RAW = ROOT / "data/surgpose/raw"
 OUT = ROOT / "data/cache/surgpose"
 SCALE = 0.5

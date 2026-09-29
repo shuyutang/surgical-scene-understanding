@@ -2,8 +2,19 @@ import cv2
 import numpy as np
 import pytest
 
-from surgscene.geometry import (Camera, StereoRig, apply, quat_from_R, R_from_quat, rigid, rigid_inv, so3_exp,
-                                so3_log, triangulate, triangulate_dlt)
+from surgscene.geometry import (
+    Camera,
+    R_from_quat,
+    StereoRig,
+    apply,
+    quat_from_R,
+    rigid,
+    rigid_inv,
+    so3_exp,
+    so3_log,
+    triangulate,
+    triangulate_dlt,
+)
 from surgscene.shape import umeyama
 
 rng = np.random.default_rng(0)

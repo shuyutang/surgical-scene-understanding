@@ -19,14 +19,14 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.evaluation import boot
+from surgscene.frontend import TEST2, TUNE, load_kp_model
+from surgscene.keypoints import KeypointDataset, load_records
+from surgscene.kp_eval import NATIVE, OCC_RADIUS, finished, infer, metrics, occlusion_plan, spearman
+from surgscene.kp_vit import DinoKeypointNet, read_at
+from surgscene.structured import observe
 
-from surgscene.frontend import TEST2, TUNE, load_kp_model  # noqa: E402
-from surgscene.keypoints import KeypointDataset, load_records  # noqa: E402
-from surgscene.kp_vit import DinoKeypointNet, read_at  # noqa: E402
-from surgscene.structured import observe  # noqa: E402
-from surgscene.evaluation import boot  # noqa: E402
-from surgscene.kp_eval import NATIVE, OCC_RADIUS, finished, infer, metrics, occlusion_plan, spearman  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 UNET = {"v2 s0": "kp_unet_r34_decentered_2", "v2 s1": "kp_unet_r34_decentered_s1_"}
 CONFIG = ROOT / "configs/v3_kp_vit_selected.json"

@@ -21,6 +21,7 @@ from surgscene.frontend import SCALE, TEST2, TUNE, load_kp_model, load_vit_model
 from surgscene.keypoints import _disk, paste_occluder
 
 ROOT = Path(__file__).resolve().parents[1]
+
 RAW = ROOT / "data/surgpose/raw"
 OUT = ROOT / "data/cache/surgpose_obs"
 KP_IDS = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12]

@@ -21,9 +21,10 @@ import numpy as np
 
 from surgscene.geometry import load_stereo_ini
 from surgscene.proximity import TIPS, Rectifier, disparity, instrument_mask, make_sgbm, tissue_plane
-from surgscene.rectification import load_gt, shift_rows, sift_dy  # noqa: E402
+from surgscene.rectification import load_gt, shift_rows, sift_dy
 
 ROOT = Path(__file__).resolve().parents[1]
+
 RAW = ROOT / "data/surgpose/raw"
 OUT = ROOT / "runs/rectification"
 TRAJS = list(range(0, 21)) + [23]

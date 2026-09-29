@@ -24,6 +24,7 @@ from surgscene.kp_vit import DinoKeypointNet, decode_torch, nll_loss
 from surgscene.runinfo import write_runinfo
 
 ROOT = Path(__file__).resolve().parents[1]
+
 NATIVE = 2.0
 
 

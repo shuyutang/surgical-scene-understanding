@@ -22,6 +22,7 @@ from surgscene.frontend import load_kp_model, preprocess, run_batch
 from surgscene.sam2_track import Sam2Tracker, prompt_points, save_masks, start_frame
 
 ROOT = Path(__file__).resolve().parents[1]
+
 RAW = ROOT / "data/surgpose/raw"
 OUT = ROOT / "data/cache/surgpose_masks"
 SEARCH = 90

@@ -17,6 +17,7 @@ from surgscene.models import build_seg_model
 from surgscene.runinfo import write_runinfo
 
 ROOT = Path(__file__).resolve().parents[1]
+
 NATIVE = 2.0  # cache px -> native px
 
 

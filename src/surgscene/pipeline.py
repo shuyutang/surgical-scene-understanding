@@ -14,8 +14,20 @@ import pickle
 
 import numpy as np
 
-from .fusion import (ARMS, FusionParams, ToolGeometry, calib_observations, classify_type, fit_calibration, fuse_arm,
-                     length_constrained_depth, load_kinematics, observations, pixel_std, triangulate_with_depth_prior)
+from .fusion import (
+    ARMS,
+    FusionParams,
+    ToolGeometry,
+    calib_observations,
+    classify_type,
+    fit_calibration,
+    fuse_arm,
+    length_constrained_depth,
+    load_kinematics,
+    observations,
+    pixel_std,
+    triangulate_with_depth_prior,
+)
 from .geometry import register_rigid_robust
 from .sam2_track import load_masks
 from .stage2 import ROOT, TIP, framewise, load_obs, load_rig, load_selected, shape_models, triangulate_seq
@@ -60,8 +72,8 @@ def prepare(traj, models, hp, kfp):
         ray = g / np.linalg.norm(g, axis=1, keepdims=True)
         C = (Cc[:, a] + Cc[:, b]) / 4
         ref_sd[arm] = np.sqrt(np.einsum("fi,fij,fj->f", ray, C, ray))
-    return dict(O=O, OR=OR, gL=gL, gR=gR, rig=rig, f5=f5, G=G, V2=V2, kin=load_kinematics(traj), kfL=kf, kfR=kfR, std=std, stdR=stdR,
-                ref_sd=ref_sd)
+    return dict(O=O, OR=OR, gL=gL, gR=gR, rig=rig, f5=f5, G=G, V2=V2, kin=load_kinematics(traj), kfL=kf, kfR=kfR,
+                std=std, stdR=stdR, ref_sd=ref_sd)
 
 
 def run_variant(D, p: FusionParams, oracle=False):

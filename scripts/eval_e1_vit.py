@@ -12,14 +12,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.deploy import DeployModelVit
+from surgscene.evaluation import boot
+from surgscene.frontend import TEST2, load_vit_model
+from surgscene.stage2 import load_obs
+from surgscene.trt_runner import TrtRunner
+from surgscene.video import frames
 
-from surgscene.deploy import DeployModelVit  # noqa: E402
-from surgscene.frontend import TEST2, load_vit_model  # noqa: E402
-from surgscene.stage2 import load_obs  # noqa: E402
-from surgscene.trt_runner import TrtRunner  # noqa: E402
-from surgscene.evaluation import boot  # noqa: E402
-from surgscene.video import frames  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 DEP = ROOT / "runs/deploy_vit"
 MARGIN = 0.25

@@ -19,12 +19,12 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.fusion import ARMS, FusionParams
+from surgscene.pipeline import CHI2_3_95, hybrid, prepare, run_variant
+from surgscene.stage2 import TIP, load_selected, shape_models
+from surgscene.temporal import KFParams
 
-from surgscene.fusion import (ARMS, FusionParams)
-from surgscene.stage2 import TIP, load_selected, shape_models  # noqa: E402
-from surgscene.temporal import KFParams  # noqa: E402
-from surgscene.pipeline import CHI2_3_95, hybrid, prepare, run_variant  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 TUNE = [18, 19, 20, 23]
 OUT = ROOT / "runs/v3_fusion"

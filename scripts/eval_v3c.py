@@ -20,13 +20,14 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.evaluation import boot
+from surgscene.fusion import FusionParams
+from surgscene.pipeline import SWAP_MARGIN_MM, prepare
+from surgscene.pipeline import v3c_per_trajectory as per_trajectory
+from surgscene.stage2 import SPLITS, load_selected, shape_models
+from surgscene.temporal import KFParams
 
-from surgscene.fusion import FusionParams  # noqa: E402
-from surgscene.stage2 import SPLITS, load_selected, shape_models  # noqa: E402
-from surgscene.temporal import KFParams  # noqa: E402
-from surgscene.evaluation import boot  # noqa: E402
-from surgscene.pipeline import SWAP_MARGIN_MM, prepare, v3c_per_trajectory as per_trajectory  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 CONFIG = ROOT / "configs/v3_fusion_selected.json"
 LONG_JAW_MM = 15.0

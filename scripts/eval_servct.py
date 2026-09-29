@@ -20,12 +20,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.evaluation import ci
+from surgscene.learned_stereo import LearnedStereo
+from surgscene.proximity import disparity, make_sgbm
+from surgscene.rectification import shift_rows, sift_dy
 
-from surgscene.evaluation import ci  # noqa: E402
-from surgscene.learned_stereo import LearnedStereo  # noqa: E402
-from surgscene.proximity import disparity, make_sgbm  # noqa: E402
-from surgscene.rectification import shift_rows, sift_dy  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 DATA = ROOT / "data/servct/SERV-CT"
 OUT = ROOT / "runs/v3_servct"

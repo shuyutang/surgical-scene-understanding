@@ -20,6 +20,7 @@ from surgscene.keypoints import KP_NAMES
 from surgscene.sam2_track import load_masks
 
 ROOT = Path(__file__).resolve().parents[1]
+
 RAW = ROOT / "data/surgpose/raw"
 MASKS = ROOT / "data/cache/surgpose_masks"
 OUT = ROOT / "runs/v4_masks_qa"

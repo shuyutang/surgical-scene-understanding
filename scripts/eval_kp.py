@@ -21,10 +21,11 @@ from tqdm import tqdm
 
 from surgscene.evaluation import ci
 from surgscene.keypoints import INSTRUMENTS, KP_NAMES, load_records
+from surgscene.kp_eval import NATIVE, infer, occlusion_plan
 from surgscene.models import build_seg_model
 from surgscene.shape import ShapeModel
 from surgscene.structured import fit_discrete, fit_map
-from surgscene.kp_eval import NATIVE, infer, occlusion_plan  # noqa: E402
+
 
 def estimate(O, models, method, hp, plaus_max):
     n = len(O["kp"])

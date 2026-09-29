@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+
 RAW = ROOT / "data/surgpose/raw/000021/regular"
 N = 100
 

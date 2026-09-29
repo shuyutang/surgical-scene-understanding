@@ -24,15 +24,15 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.fusion import ARMS, FusionParams
+from surgscene.learned_stereo import LearnedStereo
+from surgscene.pipeline import causal_types, hybrid, hybrid_length, load_prepared, run
+from surgscene.proximity import Rectifier
+from surgscene.rectification import shift_rows, sift_dy
+from surgscene.sam2_track import load_masks
+from surgscene.stage2 import TIP
 
-from surgscene.fusion import ARMS, FusionParams  # noqa: E402
-from surgscene.learned_stereo import LearnedStereo  # noqa: E402
-from surgscene.proximity import Rectifier  # noqa: E402
-from surgscene.sam2_track import load_masks  # noqa: E402
-from surgscene.stage2 import TIP  # noqa: E402
-from surgscene.pipeline import causal_types, hybrid, hybrid_length, load_prepared, run  # noqa: E402
-from surgscene.rectification import shift_rows, sift_dy  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 RAW = ROOT / "data/surgpose/raw"
 MASKS = ROOT / "data/cache/surgpose_masks"

@@ -11,7 +11,6 @@ from tqdm import tqdm
 from .keypoints import KeypointDataset
 from .structured import observe
 
-
 NATIVE = 2.0
 
 

@@ -51,3 +51,20 @@ packages = ["src/surgscene"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+# E731: one-line local lambdas are used as formatters in report code.
+# E741: single-letter names follow the math/notation (O = observations, I = identity, l = length).
+ignore = ["E731", "E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# report code builds markdown tables from long f-string templates
+"scripts/*" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["surgscene"]

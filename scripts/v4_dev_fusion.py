@@ -17,12 +17,11 @@ from pathlib import Path
 
 import numpy as np
 
+from surgscene.fusion import ARMS, FusionParams
+from surgscene.pipeline import causal_types, hybrid, hybrid_length, load_prepared, mask_gate, oracle_type, run
+from surgscene.stage2 import TIP
+
 ROOT = Path(__file__).resolve().parents[1]
-
-from surgscene.fusion import (ARMS, FusionParams)
-
-from surgscene.stage2 import TIP  # noqa: E402
-from surgscene.pipeline import causal_types, hybrid, hybrid_length, load_prepared, mask_gate, oracle_type, run  # noqa: E402
 
 TUNE = [18, 19, 20, 23]
 OUT = ROOT / "runs/v4_dev"

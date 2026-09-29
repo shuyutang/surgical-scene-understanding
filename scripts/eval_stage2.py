@@ -15,13 +15,14 @@ import numpy as np
 import yaml
 from tqdm import tqdm
 
-from surgscene.evaluation import ci
+from surgscene.evaluation import (
+    boot,
+    ci,
+)
 from surgscene.geometry import register_rigid_robust
-from surgscene.stage2 import (RAW, ROOT, SPLITS, TIP, load_obs, load_rig, load_selected, shape_models,
-                              triangulate_seq)
+from surgscene.pipeline import cached_gated
+from surgscene.stage2 import RAW, ROOT, SPLITS, TIP, load_obs, load_rig, load_selected, shape_models, triangulate_seq
 from surgscene.temporal import KFParams, filter_keypoints, jitter
-from surgscene.evaluation import boot  # noqa: E402
-from surgscene.pipeline import cached_gated  # noqa: E402
 
 EST = ROOT / "data/cache/stage2_est"
 PLANES = ROOT / "data/cache/tissue_planes"
@@ -213,7 +214,6 @@ def main():
     rp = rp[np.isfinite(rp)]
     R["gt_reproj_rms"] = {"median": float(np.median(rp)), "p95": float(np.percentile(rp, 95)),
                           "frac_gt3px": float(np.mean(rp > 3))}
-    m = R["metrics"]
     R["criteria"] = criteria(R)
     (out_dir / "results.json").write_text(json.dumps(R, indent=1))
     txt = render(R)
@@ -224,7 +224,6 @@ def main():
 def criteria(R):
     """Pre-specified in docs/validation_plan.md (stage 2). Each: (id, description, value, rule, pass)."""
     m, d = R["metrics"], R["derived"]
-    tp = R["toggles_per_min"]
     c = [
         ("G1", "gated − argmax mean error, clean (px)", m["d_gat_clean"], "UB < 0", m["d_gat_clean"]["hi"] < 0),
         ("G2", "gated − argmax PCK@5", d["d_pck5_gated_minus_argmax"], "LB ≥ −0.02",
@@ -252,8 +251,10 @@ def criteria(R):
 
 def ratio_boot(num, den, n_boot=2000, seed=0):
     rng = np.random.default_rng(seed)
-    a = np.array([np.nansum(v) for v in num]); ca = np.array([np.isfinite(v).sum() for v in num])
-    b = np.array([np.nansum(v) for v in den]); cb = np.array([np.isfinite(v).sum() for v in den])
+    a = np.array([np.nansum(v) for v in num])
+    ca = np.array([np.isfinite(v).sum() for v in num])
+    b = np.array([np.nansum(v) for v in den])
+    cb = np.array([np.isfinite(v).sum() for v in den])
     reps = []
     for _ in range(n_boot):
         i = rng.integers(0, len(num), len(num))

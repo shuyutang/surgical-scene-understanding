@@ -1,9 +1,15 @@
 import numpy as np
-
-from surgscene.fusion import ToolGeometry, calib_observations, fit_calibration, observations, project_both, \
-    triangulate_with_depth_prior
-from surgscene.geometry import so3_exp
 from test_geometry import rig
+
+from surgscene.fusion import (
+    ToolGeometry,
+    calib_observations,
+    fit_calibration,
+    observations,
+    project_both,
+    triangulate_with_depth_prior,
+)
+from surgscene.geometry import so3_exp
 
 
 def _geom(**kw):

@@ -21,7 +21,7 @@ from surgscene.stage2 import ROOT, load_obs, load_rig, load_selected, shape_mode
 from surgscene.structured import fit_gated
 from surgscene.temporal import KFParams, filter_keypoints
 from surgscene.trt_runner import TrtRunner
-from surgscene.video import frames  # noqa: E402
+from surgscene.video import frames
 
 DEP = ROOT / "runs/deploy"
 GOLD = DEP / "goldens"
@@ -86,7 +86,9 @@ def main():
             a32.append(np.nanmean(ea) if np.isfinite(ea).any() else np.nan)
             a16.append(np.nanmean(ec) if np.isfinite(ec).any() else np.nan)
             dl.append(np.nanmean(ec - ea) if np.isfinite(ea).any() else np.nan)
-        e32.append(np.array(a32)); e16.append(np.array(a16)); dd.append(np.array(dl))
+        e32.append(np.array(a32))
+        e16.append(np.array(a16))
+        dd.append(np.array(dl))
     R["D2"] = {"torch_fp32_err": boot_mean(e32), "trt_fp16_err": boot_mean(e16), "delta": boot_mean(dd)}
     R["D2"]["pass"] = R["D2"]["delta"]["hi"] <= 0.25
     print(json.dumps(R["D2"], indent=1))

@@ -22,6 +22,7 @@ from pathlib import Path
 import cv2
 
 ROOT = Path(__file__).resolve().parents[1]
+
 SISVSE = ROOT / "data/sisvse/miccai2022_sisvse_dataset"
 ENDOVIS = ROOT / "data/endovis18"
 CACHE = ROOT / "data/cache"

@@ -22,6 +22,7 @@ from surgscene.runinfo import git_state
 from surgscene.trt_runner import FP32_TYPES_VIT, build_engine
 
 ROOT = Path(__file__).resolve().parents[1]
+
 OUT = ROOT / "runs/deploy_vit"
 OPSET = 17
 

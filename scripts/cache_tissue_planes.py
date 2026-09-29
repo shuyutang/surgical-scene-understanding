@@ -10,12 +10,11 @@ npts (T, 2), R1 (3, 3).
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 import cv2
 import numpy as np
 
-from surgscene.proximity import Rectifier, TIPS, disparity, instrument_mask, make_sgbm, tissue_plane
+from surgscene.proximity import TIPS, Rectifier, disparity, instrument_mask, make_sgbm, tissue_plane
 from surgscene.stage2 import RAW, ROOT, TEST2, TUNE, load_obs, load_rig, load_selected, shape_models
 from surgscene.temporal import KFParams, filter_keypoints
 

@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 import torch
 
 from surgscene.keypoints import decode, focal_loss, render_heatmaps

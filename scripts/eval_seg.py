@@ -16,12 +16,10 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from surgscene.data import (CACHE, SegDataset, endovis18_frames, endovis18_group, sisvse_frames,
-                            sisvse_group)
+from surgscene.data import CACHE, SegDataset, endovis18_frames, endovis18_group, sisvse_frames, sisvse_group
 from surgscene.evaluation import ci, cluster_bootstrap, frame_stats, quality_proxies, stack, summarize
 from surgscene.models import build_seg_model
-from surgscene.taxonomy import (ANATOMY, ENDOVIS18_TO_HARMONIZED, HARMONIZED, SISVSE_CLASSES,
-                                SISVSE_TO_HARMONIZED)
+from surgscene.taxonomy import ANATOMY, ENDOVIS18_TO_HARMONIZED, HARMONIZED, SISVSE_CLASSES, SISVSE_TO_HARMONIZED
 
 H = {n: i for i, n in enumerate(HARMONIZED)}
 S = {n: i for i, n in enumerate(SISVSE_CLASSES)}

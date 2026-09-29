@@ -18,6 +18,7 @@ from surgscene.runinfo import git_state
 from surgscene.trt_runner import build_engine
 
 ROOT = Path(__file__).resolve().parents[1]
+
 OUT = ROOT / "runs/deploy"
 OPSET = 17
 

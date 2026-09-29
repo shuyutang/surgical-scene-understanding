@@ -408,9 +408,9 @@ def length_constrained_depth(r: np.ndarray, P: np.ndarray, L: float, sd_L: float
     (which carries the cable-driven wrist error on long-jaw tools). Its depth std is
     sqrt((sd_L L)^2 + (d_perp sd_lat)^2) / sqrt(disc): the length spread, plus the detection's
     lateral std sd_lat (mm at the tip's depth) acting through the lateral pivot-to-tip distance
-    d_perp. Both blow up when the ray grazes the sphere (jaw perpendicular to the ray). It's combined with the kinematic depth (std sd_kin) by inverse
-    variance. Returns (X_centre, sd) for triangulate_with_depth_prior, or the kinematic prior
-    alone when the ray misses the sphere."""
+    d_perp. Both blow up when the ray grazes the sphere (jaw perpendicular to the ray). It's
+    combined with the kinematic depth (std sd_kin) by inverse variance. Returns (X_centre, sd) for
+    triangulate_with_depth_prior, or the kinematic prior alone when the ray misses the sphere."""
     s_kin = float(r @ X_kin)
     b = float(r @ P)
     disc = b * b - float(P @ P) + L * L

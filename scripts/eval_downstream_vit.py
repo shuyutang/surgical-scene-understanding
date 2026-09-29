@@ -23,13 +23,14 @@ from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.evaluation import boot
+from surgscene.fusion import FusionParams
+from surgscene.pipeline import CHI2_3_95, hybrid, prepare, run_variant
+from surgscene.pipeline import v3c_per_trajectory as per_trajectory
+from surgscene.stage2 import SPLITS, TIP, load_selected, shape_models, triangulate_seq
+from surgscene.temporal import KFParams, filter_keypoints
 
-from surgscene.fusion import FusionParams  # noqa: E402
-from surgscene.stage2 import SPLITS, TIP, load_selected, shape_models, triangulate_seq  # noqa: E402
-from surgscene.temporal import KFParams, filter_keypoints  # noqa: E402
-from surgscene.evaluation import boot  # noqa: E402
-from surgscene.pipeline import CHI2_3_95, hybrid, prepare, run_variant, v3c_per_trajectory as per_trajectory  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 VIT_OBS = ROOT / "data/cache/surgpose_obs_vit"
 CFG_C = ROOT / "configs/v3_fusion_selected.json"

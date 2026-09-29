@@ -22,7 +22,6 @@ Writes runs/v4_sam2_feas/{results.json, report.md, overlays/}.
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
@@ -30,9 +29,10 @@ import cv2
 import numpy as np
 import torch
 
+from surgscene.keypoints import INSTRUMENTS, KP_NAMES
+from surgscene.stage2 import RAW, load_obs
+
 ROOT = Path(__file__).resolve().parents[1]
-from surgscene.keypoints import INSTRUMENTS, KP_NAMES  # noqa: E402
-from surgscene.stage2 import RAW, load_obs  # noqa: E402
 
 OUT = ROOT / "runs/v4_sam2_feas"
 TUNE = [18, 19, 20, 23]

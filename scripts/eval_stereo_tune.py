@@ -21,12 +21,12 @@ import cv2
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
+from surgscene.geometry import load_stereo_ini
+from surgscene.learned_stereo import CHECKPOINTS, LearnedStereo
+from surgscene.proximity import TIPS, Rectifier, disparity, instrument_mask, make_sgbm, tissue_plane
+from surgscene.rectification import load_gt, shift_rows, sift_dy
 
-from surgscene.geometry import load_stereo_ini  # noqa: E402
-from surgscene.learned_stereo import CHECKPOINTS, LearnedStereo  # noqa: E402
-from surgscene.proximity import TIPS, Rectifier, disparity, instrument_mask, make_sgbm, tissue_plane  # noqa: E402
-from surgscene.rectification import load_gt, shift_rows, sift_dy  # noqa: E402
+ROOT = Path(__file__).resolve().parents[1]
 
 RAW = ROOT / "data/surgpose/raw"
 TUNE = [18, 19, 20, 23]
