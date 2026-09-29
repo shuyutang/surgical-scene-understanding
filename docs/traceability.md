@@ -1,4 +1,4 @@
-# Traceability: requirements → tests → results (v2 + v3), 2026-09-28
+# Traceability: requirements → tests → results (v2, v3, v4), 2026-09-29
 
 Every row is a pre-specified endpoint from [validation_plan.md](validation_plan.md) unless it's
 marked **post hoc**. Unit of analysis: patient (Phase 1), trajectory (SurgPose), or stereo pair
@@ -9,7 +9,7 @@ used by v2 stage 2 and again by v3 (disclosed in each pre-registration). SERV-CT
 
 | ID | Requirement | Status |
 |---|---|---|
-| R1 | Instrument tip localized in 3D within 5 mm | **Not met.** v2 10.0 → v3 5.27 mm (upper bound 7.4). Met on standard instruments (3.86 mm, pre-specified subgroup), not on the long-jaw tool |
+| R1 | Instrument tip localized in 3D within 5 mm | **Not met.** v2 10.0 → v3 5.27 → v4 4.82 mm (upper bound 6.2; point estimate under 5 for the first time). Standard instruments 3.7 mm; long-jaw 9.2 mm (v4) |
 | R2 | Critical-structure segmentation adequate for proximity | **Open.** Segmentation passes on SISVSE, but no dataset has anatomy and stereo together |
 | R3 | End-to-end p99 < 33 ms at 30 fps | **Met without stereo** (v2 D4 2.59 ms). With the v3 front end and fast stereo, the measured GPU stages sum to about 16 ms (4.4 + 10.7), but there's no end-to-end C++ measurement yet |
 | R4 | Stable output, no alert flicker | **Met** (S5: toggles −46%) |
@@ -32,6 +32,10 @@ used by v2 stage 2 and again by v3 (disclosed in each pre-registration). SERV-CT
 | **Post hoc:** 3D tip offset (`tip_mode 3d`) | test2 (2nd) | 4.17 [2.97, 5.84] mm | hypothesis only |
 | V1: DINOv2 inputs − v2 inputs through Phase C | test2 (3rd) | −0.24 [−1.30, 0.65] mm | FAIL |
 | V2: mean 3D tip error, DINOv2 inputs | test2 (3rd) | 5.03 [3.95, 6.29] mm | FAIL |
+| **M1: v4 jaw-length constraint − v3, arms classified long** | test2 (4th) | −2.15 [−5.34, 1.03] mm (5 arms, 1 misclassified) | **FAIL** |
+| M2: mean 3D tip error, v4 | test2 (4th) | 4.82 [3.63, 6.21] mm | FAIL |
+| M3: causal instrument-type classification | test2 (4th) | 23/24 | PASS |
+| **Post hoc:** v4 − v3 on the 4 GT long-jaw arms | test2 (4th) | −0.4, −6.5, −0.2, −6.7 mm | hypothesis only |
 
 ## 2D keypoints and structured inference (support R1, R5)
 
@@ -65,6 +69,7 @@ used by v2 stage 2 and again by v3 (disclosed in each pre-registration). SERV-CT
 | A5: learned σ ranks errors | test2 | ρ +0.53 vs −0.25 (Laplace σ) | PASS |
 | A8: learned σ × k (tune) | test2 | 0.952 | PASS |
 | V4: hybrid with learned σ, κ = 5.09 (half of C3's) | test2 (3rd) | 0.967 | PASS |
+| M4: v4, κ = 12.79 | test2 (4th) | 0.957 | PASS |
 
 ## Tissue depth and proximity (R1 → proximity, R4)
 
@@ -86,6 +91,7 @@ used by v2 stage 2 and again by v3 (disclosed in each pre-registration). SERV-CT
 | S2: liver / stomach Dice | 0.850 / 0.814 | PASS |
 | S4: zero-shot instrument Dice (EndoVis18) | 0.778 [0.748, 0.810] | PASS |
 | Transfer to SurgPose (not pre-specified) | labels beef as instrument | not usable downstream |
+| v4 SAM 2 instrument masks on SurgPose (development, train + tune; label-free on test2) | body keypoint coverage 0.999 / 0.976, no swaps | usable, but no mask measurement helped 3D (v4 report) |
 
 ## R3, R6: deployment
 
@@ -101,8 +107,9 @@ used by v2 stage 2 and again by v3 (disclosed in each pre-registration). SERV-CT
 
 ## Open items, by what would change a verdict
 
-1. **R1 on long-jaw instruments:** the kinematic tip precision at 24 mm and keypoint training
-   coverage (one of 18 training trajectories). The post-hoc 3D tip offset needs fresh data to confirm.
+1. **R1 on long-jaw instruments:** the cable-driven wrist error at 24–29 mm from the pivot. v4's
+   jaw-length constraint helps on true long-jaw arms, but its type threshold must be calibrated on
+   detections (post hoc, v4). Both it and the v3 3D tip offset need fresh data to confirm.
 2. **R3 end to end:** a TensorRT stereo engine, the C++ fusion port, and one measured p99 for the whole v3 pipeline.
 3. **R2 end to end:** needs data with anatomy labels and stereo in the same frames.
-4. **Fresh SurgPose-like data** for any further confirmatory claim: test2 has been used twice.
+4. **Fresh SurgPose-like data** for any further confirmatory claim: test2 has now been used four times.

@@ -1,4 +1,4 @@
-# Conventional vs modern: what each choice bought, 2026-09-28
+# Conventional vs modern: what each choice bought, 2026-09-28 (v4 rows added 2026-09-29)
 
 This is a consolidation of results already reported elsewhere; no new evaluation was run for it.
 Every number links back to a pre-specified endpoint in [validation_plan.md](validation_plan.md)
@@ -25,6 +25,8 @@ else held fixed.
 | 3D tip | Vision-only triangulation: 10.05 [7.62, 12.85] mm | Kinematics-fused EKF, causal hand-eye (classical) | **5.27** [3.56, 7.43] mm; difference −4.78 [−6.93, −2.71] | S1, C1, C2, test2 | **Classical** |
 | 3D tip, front end swapped | v2 keypoints into the Phase C fusion | DINOv2 keypoints + learned σ | 5.27 → 5.03 [3.95, 6.29] mm; difference −0.24 [−1.30, 0.65] | V1, V2, test2 | **Neither** |
 | Uncertainty inflation needed | κ = 10.5 (heatmap σ) | κ = 5.1 (learned σ) | Same coverage (0.971 vs 0.967) with half the inflation | C3, V4, test2 | **Modern** |
+| Instrument masks as a 3D measurement (v4) | Keypoints + kinematics only | SAM 2.1 masks (type ratio, shaft-width depth, visibility gate) | All three no better than without masks on train/tune; a kinematic jaw-length feature beat the mask ratio | v4 development | **Classical** |
+| Long-jaw tip depth (v4) | v3 rigid tool model | Jaw-length constraint (geometric, classical) | Arms classified long −2.15 [−5.34, 1.03] mm (1 misclassified); mean 5.27 → 4.82 mm | M1, M2, test2 (4th) | **Neither** (primary fails) |
 
 ## Cost side
 

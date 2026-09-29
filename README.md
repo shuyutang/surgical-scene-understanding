@@ -3,7 +3,7 @@
 A practice project in surgical perception. The plan is in
 [project_plan_v2.md](project_plan_v2.md).
 The next iteration (foundation backbone, learned stereo, kinematics-fused factor graph) is planned in
-[project_plan_v3.md](project_plan_v3.md). v4 draft (SAM 2 masks as a measurement): [project_plan_v4.md](project_plan_v4.md), step 0 [report](docs/v4_step0_sam2_feasibility.md).
+[project_plan_v3.md](project_plan_v3.md). v4 (SAM 2 masks as a measurement, then a jaw-length constraint for long-jaw tools): [plan](project_plan_v4.md), [report](docs/v4_report.md), [step 0](docs/v4_step0_sam2_feasibility.md).
 Pre-specified acceptance criteria are in [docs/validation_plan.md](docs/validation_plan.md).
 
 | Phase | What | Data | Status |

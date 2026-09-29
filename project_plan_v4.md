@@ -1,4 +1,8 @@
-# Practice Project v4: Instrument Masks as a Measurement (draft outline, 2026-09-28)
+# Practice Project v4: Instrument Masks as a Measurement (outline 2026-09-28; done 2026-09-29)
+
+**Outcome:** see [docs/v4_report.md](docs/v4_report.md). The masks didn't help as a measurement; the
+method that went to test was a jaw-length constraint for long-jaw tools (M1 fail, one misclassified arm;
+mean 3D tip error 4.82 mm). The outline below is the original plan, kept as written.
 
 v3 is closed: its results are reported against pre-registrations in [docs/traceability.md](docs/traceability.md).
 v4 adds one new measurement modality, SAM 2 instrument masks, and asks one question:
