@@ -216,3 +216,15 @@ The full account, with the test2 table, is Amendment 1 in `validation_plan.md`.
   - A5 PASS: the learned σ ranks errors (ρ +0.53 vs −0.25).
   - A8 PASS: 95.2% coverage with k fitted on tune.
 - Report: `v3a_test_report.md`.
+
+## Step 7: DINOv2 downstream, ViT FP16, fast stereo — 2026-09-28
+
+Pre-registered in `a14b7b3`. Report: `v3_step5_e1_b5_report.md`.
+- **V1 FAIL, V2 FAIL:** 3D is unchanged on average (5.03 vs 5.27 mm). The long-jaw tool improves
+  by about 3 mm and some standard trajectories get worse.
+- **V3 PASS:** occlusion −4.3 px through the Kalman filter.
+- **V4 PASS:** κ halves (10.5 → 5.1).
+- **E1 PASS:** ViT FP16 +0.08 px vs GT, 4.4 ms. Two FP16 traps: an index overflow (fixed) and a
+  0.88 px TensorRT-specific shift (unresolved, harmless vs GT).
+- **B5 PASS:** `realtime` @ 4 iterations gives 1.9 mm on SERV-CT at 10.7 ms. The GPU budget now
+  sums to about 16 ms.
