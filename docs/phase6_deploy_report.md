@@ -1,6 +1,6 @@
 # Phase 6: deployment (TensorRT + C++ runtime), 2026-09-25
 
-Criteria D1–D4 were pre-specified in [validation_plan.md](validation_plan.md) (commit `8f6b2d7`)
+Criteria D1–D4 were pre-specified in [validation_plan.md](validation_plan.md) (commit `d7bfdb5`)
 before any of these numbers were computed. RTX 4090, TensorRT 10.16.1, CUDA 12.8 runtime,
 g++ 13.3, Eigen 3.4.
 

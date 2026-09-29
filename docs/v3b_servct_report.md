@@ -1,6 +1,6 @@
 # v3 Phase B: learned stereo vs SGM on SERV-CT (pre-specified), 2026-09-28
 
-Pre-registration: `docs/validation_plan.md`, "v3 Phase B", committed in `16fd1d3` before this
+Pre-registration: `docs/validation_plan.md`, "v3 Phase B", committed in `effef97` before this
 run. The run was `uv run --group stereo python scripts/eval_servct.py`, once; output is in
 `runs/v3_servct/`. **SERV-CT is fresh data**, unused for any choice before this run. The
 RAFT-Stereo checkpoint (`middlebury`) was selected on SurgPose tune.

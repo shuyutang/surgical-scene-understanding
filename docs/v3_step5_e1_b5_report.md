@@ -1,6 +1,6 @@
 # v3: DINOv2 front end downstream (V1–V4), ViT FP16 engine (E1), fast stereo (B5), 2026-09-28
 
-All three were pre-registered in `a14b7b3` and run once:
+All three were pre-registered in `f22f390` and run once:
 - `scripts/eval_downstream_vit.py --split test2` (test2, 3rd use);
 - `scripts/eval_e1_vit.py` (test2);
 - `scripts/eval_servct.py --checkpoint realtime --iters 4` (SERV-CT, 2nd use).

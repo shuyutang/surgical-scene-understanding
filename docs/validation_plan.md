@@ -241,7 +241,7 @@ priors) and tune (18, 19, 20, 23: everything else).
 
 ## Prior exposure, stated plainly
 
-- **test2 is being used a second time.** The v2 stage-2 evaluation ran on it once (`f2c2509`),
+- **test2 is being used a second time.** The v2 stage-2 evaluation ran on it once (`b0d7522`),
   and v3 exists because v2's S1 failed there, with the error almost entirely along the viewing ray.
   So v3's *direction* was motivated by a test2 result. No v3 component (kinematics, calibration,
   fusion, hybrid) has been computed on any test2 trajectory.
@@ -318,7 +318,7 @@ matters, constraining δ laterally, was made before the grid.
 
 ## Amendment 1 to v3 Phase C (2026-09-28, POST HOC: after the pre-specified test2 run)
 
-The pre-specified run (`c1c7987`) showed no gain on long-jaw instruments. On train 17 and tune
+The pre-specified run (`5eb5190`) showed no gain on long-jaw instruments. On train 17 and tune
 18/19, the tip midpoint of that tool scatters 4–6 mm in the kinematic tool frame (standard tools:
 about 1 mm). Kinematics is less precise at 24 mm from the pivot, so the rigid model's oracle floor
 is 3.7–6.7 mm.
