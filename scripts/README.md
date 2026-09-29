@@ -20,6 +20,7 @@ test say so; they were run once on the test split, after the pre-registration wa
 | Phase E | `export_trt_vit.py`, `eval_deploy_vit.py`, `eval_e1_vit.py` | DINOv2 TensorRT export, development checks, pre-registered E1 |
 | **v4** | `v4_sam2_feasibility.py`, `v4_make_masks.py`, `v4_mask_qa.py` | SAM 2 feasibility, masks for all videos, mask QA |
 | | `v4_tool_library.py`, `v4_dev_fusion.py`, `eval_v4.py` | Instrument-type library (train), development variants (tune), pre-registered M1–M5 |
+| Scene semantics | `grasp_prepare.py` | Frozen GraSP split and label arrays (official labels) |
 | **v5** | `v5_dev_stereo_tip.py`, `v5_tissue_memory.py` | Development only: stereo on instrument jaws; tissue memory |
 
 Shared logic lives in the package (`surgscene.pipeline`, `surgscene.kp_eval`,

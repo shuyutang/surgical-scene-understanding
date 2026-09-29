@@ -1,0 +1,83 @@
+{
+ "source": "GraSP 1 fps, long-term annotations (December 2024 revision)",
+ "phases": [
+  "Idle",
+  "LPIL",
+  "RPIL",
+  "Retzius_Space",
+  "Dorsal_Venous_Complex",
+  "Id_Bladder_Neck",
+  "Seminal_Vesicles",
+  "Denonvilliers_Fascia",
+  "Pedicle_Control",
+  "Severing_Prostate_Urethra",
+  "Bladder_Neck_Rec"
+ ],
+ "steps": [
+  "Idle",
+  "Id_Illiac_Vein_Artery",
+  "Dissection_Illiac_Lymph_Nodes",
+  "Dissection_Obturator_Lymph_Nodes",
+  "Pack_Lymph_Nodes",
+  "Prevessical_Dissection",
+  "Ligation_Dorsal_Venous_Complex",
+  "Prostate_Dissection",
+  "Seminal_Vessicle_Dissection",
+  "Denon_Dissection",
+  "Cut_Prostate",
+  "Hold_Prostate",
+  "Pack_Prostate",
+  "Pass_Suture_Urethra",
+  "Pass_Suture_Neck",
+  "Pull_Suture",
+  "Tie_Suture",
+  "Suction",
+  "Cut",
+  "Cut_Bladder",
+  "Clip_Pedicles"
+ ],
+ "splits": {
+  "train": {
+   "cases": {
+    "CASE001": 10972,
+    "CASE002": 9443,
+    "CASE003": 5882,
+    "CASE004": 8490,
+    "CASE007": 8018,
+    "CASE014": 9973,
+    "CASE015": 8969,
+    "CASE021": 11871
+   },
+   "n_frames": 73618,
+   "hash": "3efe899554973450"
+  },
+  "test": {
+   "cases": {
+    "CASE041": 9451,
+    "CASE047": 6502,
+    "CASE050": 13899,
+    "CASE051": 2496,
+    "CASE053": 10549
+   },
+   "n_frames": 42897,
+   "hash": "6fb97152f3d58a5b"
+  }
+ },
+ "dropped_missing_frames": [
+  "CASE001/10972.jpg"
+ ],
+ "dev_folds": {
+  "fold1": [
+   "CASE001",
+   "CASE004",
+   "CASE014",
+   "CASE015"
+  ],
+  "fold2": [
+   "CASE002",
+   "CASE003",
+   "CASE007",
+   "CASE021"
+  ]
+ }
+}

@@ -12,6 +12,7 @@ component by component.
 | [plans/plan_v2.md](plans/plan_v2.md) | Phases 1–6: segmentation, keypoints, shape prior + MAP, Kalman filter, stereo, TensorRT/C++ |
 | [plans/plan_v3.md](plans/plan_v3.md) | Kinematics fusion, learned stereo, DINOv2 keypoints, deployment |
 | [plans/plan_v4.md](plans/plan_v4.md) | SAM 2 masks as a measurement |
+| [plans/plan_scene_semantics.md](plans/plan_scene_semantics.md) | Separate track: phase and step recognition on GraSP |
 
 ## Validation
 

@@ -65,6 +65,7 @@ terms before use.
 | SISVSE | Semantic segmentation (Phase 1) | MICCAI 2022 SISVSE release | see the dataset's terms |
 | EndoVis 2018 Robotic Scene Segmentation | Zero-shot segmentation test | HF mirror `BeileiCui/EndoVis18` | challenge terms |
 | SERV-CT | Stereo depth accuracy (CT ground truth) | SERV-CT release | CC BY-NC-SA 4.0 (non-commercial) |
+| GraSP (1 fps) | Phase and step recognition (scene-semantics track) | github.com/BCV-Uniandes/GraSP (Google Drive) | no data license stated; research use |
 
 Pretrained models: DINOv2 (Apache 2.0, via `timm`), SAM 2.1 (Apache 2.0, via `transformers`),
 RAFT-Stereo (MIT). TensorRT is installed from NVIDIA's pip wheels under NVIDIA's license.
