@@ -420,3 +420,60 @@ sharper on the in-domain trajectories (18, 19) but not better on the shifted, la
 trajectories (20, 23). A1 is therefore expected to fail. The plan's A4 (mask head) wasn't built,
 per its cut list. Downstream use of the new keypoints (Phase C with Phase A inputs) isn't part of
 this test.
+
+---
+
+# Validation Plan: v3 step 5 (DINOv2 front end downstream), E1 (ViT FP16), B5 (fast stereo), pre-specified 2026-09-28
+
+Committed before any of these endpoints is computed on test2 or on SERV-CT.
+
+## Step 5: DINOv2 keypoints + learned σ through the Phase C pipeline (test2, 3rd use)
+
+**Method.** Only the inputs to the frozen v3 Phase C pipeline change:
+- DINOv2 argmax keypoints for both eyes (full rate: `data/cache/surgpose_obs_vit`);
+- measurement std = k · learned σ (k = 6.086, from Phase A), with confidence used only as the
+  predict-only gate;
+- Kalman r0 = 0.5, selected on tune from {0.5, 1, 2} by mean 3D hybrid error;
+- κ = 5.093, refitted on tune.
+
+Config: `configs/v3_downstream_vit_selected.json` (sha256 `d4caf829dd71fe06`). Comparator: the
+pre-registered v3 Phase C pipeline on v2 inputs, on the same frames. Script:
+`scripts/eval_downstream_vit.py --split test2`.
+
+| ID | Endpoint | Criterion | Tune |
+|---|---|---|---|
+| V1 (primary) | 3D tip error, DINOv2 inputs − v2 inputs (paired) | UB < 0 | −0.21 [−1.26, 1.00]: expected to fail |
+| V2 (R1) | Mean 3D tip error, DINOv2 inputs | UB ≤ 5.0 mm | 6.65 [5.17, 8.03] |
+| V3 | Occlusion episodes: Kalman 2D error on occluded keypoints, DINOv2 − v2 | UB < 0 | −2.35 [−6.17, 1.42] |
+| V4 (R7) | Coverage of the κ-inflated 95% ellipsoid | LB ≥ 0.85, point ≤ 0.99 | 0.950 (κ fitted here) |
+
+## E1 (R6): DINOv2 TensorRT FP16 engine (test2)
+
+**Engine:** `runs/deploy_vit/kp_vit_stereo_fp16.engine` (`scripts/export_trt_vit.py`). The
+preprocessing and decode are pinned to FP32 (without that, every keypoint was NaN from FP16
+index overflow), as are LayerNorm, softmax and reductions.
+
+**Development checks on tune** (`scripts/eval_deploy_vit.py`):
+- FP32 engine vs PyTorch: p50 0.003 px.
+- FP16 engine vs PyTorch FP32: p50 0.88 px. Unresolved: it's TensorRT-specific (PyTorch FP16
+  autocast: 0.008 px) and unaffected by the precision pinning.
+- Against GT on tune: +0.12 px mean.
+- Latency per stereo pair: FP16 4.4 ms, FP32 17.6 ms.
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| E1 | TRT FP16 − PyTorch FP32 mean keypoint error vs GT, test2 left every 5th frame (paired, trajectory-clustered) | UB ≤ +0.25 px (D2's margin) |
+
+## B5: fast stereo configuration on SERV-CT (2nd use of SERV-CT)
+
+B1 validated RAFT-Stereo `middlebury` at 32 iterations (98 ms per half-resolution pair in PyTorch
+mixed precision). The latency check puts `realtime` at 4 iterations at 10.7 ms: with the 4.4 ms
+keypoint engine, that's the only tested configuration that could fit the 33 ms budget. It was chosen
+for latency alone: no configuration was compared on SERV-CT before this commit, except B1 itself.
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| B5 | SERV-CT depth MAE, `realtime` @ 4 iterations − SGM (same protocol as B1) | UB < 0 |
+| Reported | `realtime` @ 4 vs `middlebury` @ 32 depth MAE (from the two runs) | report only |
+
+Script: `uv run --group stereo python scripts/eval_servct.py --checkpoint realtime --iters 4`.

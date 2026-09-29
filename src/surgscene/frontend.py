@@ -48,3 +48,27 @@ def run_batch(net, imgs: list[np.ndarray]) -> dict[str, np.ndarray]:
         hm = net(x).float().sigmoid()
     o = observe(hm)
     return {"kp": o.kp / SCALE, "conf": o.conf, "sigma": o.sigma / SCALE}
+
+
+def load_vit_model(ckpt: str) -> torch.nn.Module:
+    """v3 Phase A DINOv2 keypoint network (surgscene.kp_vit)."""
+    from surgscene.kp_vit import DinoKeypointNet
+    ck = torch.load(ckpt, map_location="cpu", weights_only=False)
+    cfg = ck["config"]
+    net = DinoKeypointNet(cfg["num_keypoints"], layers=cfg["layers"], variant=cfg["variant"], pretrained=False)
+    net.load_state_dict(ck["model"])
+    net.K = cfg["num_keypoints"]
+    return net.cuda().eval()
+
+
+@torch.no_grad()
+def run_batch_vit(net, imgs: list[np.ndarray]) -> dict[str, np.ndarray]:
+    """As run_batch, plus the learned localization std (native px, unscaled)."""
+    from surgscene.kp_vit import read_at
+    x = torch.stack([normalize(im) for im in imgs]).cuda()
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        y = net(x).float()
+    hm = y[:, : net.K].sigmoid()
+    o = observe(hm)
+    s = read_at(y[:, net.K:], hm.flatten(2).argmax(-1)).clamp(-6, 12).mul(0.5).exp()
+    return {"kp": o.kp / SCALE, "conf": o.conf, "sigma": o.sigma / SCALE, "sigma_learned": s.cpu().numpy() / SCALE}

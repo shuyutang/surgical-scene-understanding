@@ -11,7 +11,16 @@ _DT = {trt.float32: torch.float32, trt.float16: torch.float16, trt.uint8: torch.
        trt.int64: torch.int64}
 
 
-def build_engine(onnx_path: Path, engine_path: Path, fp16: bool) -> None:
+FP32_TYPES_VIT = ("NORMALIZATION", "SOFTMAX", "REDUCE")  # what torch autocast keeps in FP32 for a ViT
+
+
+def build_engine(onnx_path: Path, engine_path: Path, fp16: bool, fp32_outside: str | None = None,
+                 fp32_types: tuple = (), obey: bool = False) -> None:
+    """fp32_outside: keep every float layer whose name doesn't start with this prefix (e.g. "/net/",
+    the network submodule) in FP32. The decode graph turns a flat argmax index (up to 360k) into
+    pixel coordinates; in FP16 that overflows (max 65504) and quantizes x near 1400 to 1 px.
+    fp32_types: TensorRT layer types kept in FP32 everywhere (FP32_TYPES_VIT for a ViT: with LayerNorm
+    and softmax in FP16, DINOv2 keypoints moved 0.8 px; torch autocast keeps these in FP32)."""
     builder = trt.Builder(LOGGER)
     network = builder.create_network(0)
     parser = trt.OnnxParser(network, LOGGER)
@@ -21,6 +30,21 @@ def build_engine(onnx_path: Path, engine_path: Path, fp16: bool) -> None:
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)
     if fp16:
         config.set_flag(trt.BuilderFlag.FP16)
+    if fp16 and (fp32_outside or fp32_types):
+        config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS if obey else trt.BuilderFlag.PREFER_PRECISION_CONSTRAINTS)
+        floats = (trt.float32, trt.float16)
+        pin = {getattr(trt.LayerType, t) for t in fp32_types}
+        for i in range(network.num_layers):
+            layer = network.get_layer(i)
+            if layer.type in (trt.LayerType.CONSTANT, trt.LayerType.SHAPE):
+                continue
+            inside = fp32_outside is None or layer.name.startswith(fp32_outside)
+            if inside and layer.type not in pin:
+                continue
+            if layer.num_outputs and all(layer.get_output(j).dtype in floats for j in range(layer.num_outputs)):
+                layer.precision = trt.float32
+                for j in range(layer.num_outputs):
+                    layer.set_output_type(j, trt.float32)
     blob = builder.build_serialized_network(network, config)
     if blob is None:
         raise RuntimeError("engine build failed")

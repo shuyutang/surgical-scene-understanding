@@ -1,0 +1,20 @@
+{
+ "note": "v3 step 5, frozen from tune: Kalman r0 selected by mean 3D hybrid tip error; kappa for 95% coverage of the hybrid tip midpoint.",
+ "kalman_r0": 0.5,
+ "kappa": 5.0929,
+ "learned_sigma_scale": 6.086,
+ "grid": {
+  "0.5": {
+   "c1": 6.654157625860492,
+   "occ2d": 15.799396406652948
+  },
+  "1.0": {
+   "c1": 6.770761310582267,
+   "occ2d": 15.71741333664753
+  },
+  "2.0": {
+   "c1": 6.825363199376581,
+   "occ2d": 15.992989680646087
+  }
+ }
+}

@@ -17,7 +17,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from surgscene.frontend import SCALE, TEST2, TUNE, load_kp_model, preprocess, run_batch
+from surgscene.frontend import SCALE, TEST2, TUNE, load_kp_model, load_vit_model, preprocess, run_batch, run_batch_vit
 from surgscene.keypoints import _disk, paste_occluder
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,23 +53,24 @@ def episode_plan(n: int, seed: int):
     return occ, off
 
 
-def process(net, traj: int, eye: str, bs: int = 32):
+def process(net, traj: int, eye: str, bs: int = 32, run=run_batch, out_dir=None):
+    out_dir = OUT if out_dir is None else out_dir
     d = RAW / f"{traj:06d}"
     cap = cv2.VideoCapture(str(d / f"regular/{eye}_video.mp4"))
     n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     gt = load_gt(d / f"keypoints_{eye}.yaml", n)
     occluded, offset = episode_plan(n, seed=1000 + traj)
     conds = ["clean", "occ"] if eye == "left" else ["clean"]
-    out = {c: {"kp": [], "conf": [], "sigma": []} for c in conds}
+    out = {c: {} for c in conds}
     buf = {c: [] for c in conds}
     rng = np.random.default_rng(traj)
 
     def flush():
         for c in conds:
             if buf[c]:
-                r = run_batch(net, buf[c])
+                r = run(net, buf[c])
                 for k in r:
-                    out[c][k].append(r[k])
+                    out[c].setdefault(k, []).append(r[k])
                 buf[c] = []
 
     for t in tqdm(range(n), desc=f"{traj} {eye}", leave=False):
@@ -96,14 +97,24 @@ def process(net, traj: int, eye: str, bs: int = 32):
             res[k + sfx] = np.concatenate(v)[:n]
     if "occ" in conds:
         res["occluded"] = occluded[:n] & np.isfinite(gt[:n]).all(-1)
-    np.savez_compressed(OUT / f"{traj:06d}_{eye}.npz", **res)
+    np.savez_compressed(out_dir / f"{traj:06d}_{eye}.npz", **res)
     return n
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("ckpt")
+    ap.add_argument("--vit", action="store_true", help="v3 Phase A DINOv2 model; writes data/cache/surgpose_obs_vit")
     args = ap.parse_args()
+    if args.vit:  # separate cache; the v2 manifest is left untouched
+        out = ROOT / "data/cache/surgpose_obs_vit"
+        out.mkdir(parents=True, exist_ok=True)
+        net = load_vit_model(args.ckpt)
+        for traj in TUNE + TEST2:
+            for eye in ["left", "right"]:
+                if not (out / f"{traj:06d}_{eye}.npz").exists():
+                    print(traj, eye, process(net, traj, eye, run=run_batch_vit, out_dir=out), flush=True)
+        return
     OUT.mkdir(parents=True, exist_ok=True)
     net = load_kp_model(args.ckpt)
     counts = {}

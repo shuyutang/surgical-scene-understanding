@@ -69,9 +69,17 @@ def boot_paired(diffs, n_boot=2000, seed=0):
 
 
 def main():
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--checkpoint", help="override the tune-selected checkpoint (B5: realtime)")
+    ap.add_argument("--iters", type=int, default=32)
+    args = ap.parse_args()
+    global OUT
+    if args.checkpoint:
+        OUT = OUT.with_name(f"v3_servct_{args.checkpoint}_it{args.iters}")
     OUT.mkdir(parents=True, exist_ok=True)
-    sel = json.loads((ROOT / "runs/v3_stereo_tune/results.json").read_text())["selected"]
-    net, sgbm, sift = LearnedStereo(sel), make_sgbm(num_disp=160), cv2.SIFT_create(4000)
+    sel = args.checkpoint or json.loads((ROOT / "runs/v3_stereo_tune/results.json").read_text())["selected"]
+    net, sgbm, sift = LearnedStereo(sel, iters=args.iters), make_sgbm(num_disp=160), cv2.SIFT_create(4000)
     rows = []
     for exp in ("Experiment_1", "Experiment_2"):
         for path in sorted(glob.glob(str(DATA / exp / "Left_rectified/*.png"))):
@@ -102,7 +110,7 @@ def main():
     (OUT / "results.json").write_text(json.dumps(R, indent=1))
     f = lambda d, n=2: f"{d['point']:.{n}f} [{d['lo']:.{n}f}, {d['hi']:.{n}f}]"
     L = ["# B1: learned stereo vs SGM on SERV-CT (pre-specified)", "",
-         f"RAFT-Stereo checkpoint `{sel}` (selected on SurgPose tune). 16 pairs, paired bootstrap over pairs.", "",
+         f"RAFT-Stereo checkpoint `{sel}`, {args.iters} iterations. 16 pairs, paired bootstrap over pairs.", "",
          "| ID | Endpoint | Result [95% CI] | Criterion | Verdict |", "|---|---|---|---|---|",
          f"| B1 | Mean abs depth error, learned − SGM (pixels valid for both), mm | {f(b1)} | UB < 0 | "
          f"{'PASS' if R['verdict_B1'] else 'FAIL'} |", "", "Reported:", "",

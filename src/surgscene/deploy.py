@@ -72,3 +72,22 @@ def decode_graph(hm: torch.Tensor):
     curv = -(dxx + dyy) / 2
     sigma = (1 / curv.clamp(min=1e-3)).sqrt().clamp(1.0, 20.0) / SCALE
     return kp, conf, sigma
+
+
+class DeployModelVit(DeployModel):
+    """v3 Phase A: the same deploy graph around the DINOv2 keypoint network. The network emits
+    heatmap logits and a log-variance map; the learned std is read at each keypoint's argmax."""
+
+    def forward(self, frames: torch.Tensor):
+        x = frames.float().permute(0, 3, 1, 2)
+        x = F.avg_pool2d(x, 2)
+        h, w = x.shape[-2:]
+        x = F.pad(x, (0, PAD_WH[0] - w, 0, PAD_WH[1] - h))
+        x = ((x - self.mean) / self.std).flip(1)
+        y = self.net(x)
+        K = y.shape[1] // 2
+        hm = y[:, :K].sigmoid()
+        kp, conf, sigma = decode_graph(hm)
+        idx = hm.flatten(2).argmax(-1, keepdim=True)
+        lv = torch.gather(y[:, K:].flatten(2), 2, idx).squeeze(-1).clamp(-6.0, 12.0)
+        return kp, conf, sigma, (0.5 * lv).exp() / SCALE
