@@ -25,6 +25,10 @@ deploy = [
     "tensorrt-cu12>=10.9,<11",
 ]
 dev = ["pytest>=8"]
+sam = [
+    "accelerate>=1.15.0",
+    "transformers>=4.56",
+]
 stereo = [
     "opt-einsum>=3.4.0",
 ]

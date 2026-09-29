@@ -3,7 +3,7 @@
 A practice project in surgical perception. The plan is in
 [project_plan_v2.md](project_plan_v2.md).
 The next iteration (foundation backbone, learned stereo, kinematics-fused factor graph) is planned in
-[project_plan_v3.md](project_plan_v3.md).
+[project_plan_v3.md](project_plan_v3.md). v4 draft (SAM 2 masks as a measurement): [project_plan_v4.md](project_plan_v4.md), step 0 [report](docs/v4_step0_sam2_feasibility.md).
 Pre-specified acceptance criteria are in [docs/validation_plan.md](docs/validation_plan.md).
 
 | Phase | What | Data | Status |
@@ -16,7 +16,7 @@ Pre-specified acceptance criteria are in [docs/validation_plan.md](docs/validati
 | 5 | Stereo triangulation + covariance, SO(3), hand-eye from kinematics, SGM tissue proximity | SurgPose stereo + dVRK kinematics | done: 3D tip 10 mm (5 mm requirement fails: baseline physics); kinematics + registration 4.1 mm |
 | 6 | Deploy graph → ONNX → TensorRT FP16, C++ runtime + parity tests | | done: FP16 non-inferior, p99 2.6 ms per stereo pair ([report](docs/phase6_deploy_report.md)) |
 
-Summaries: [Phases 1–3](docs/phase1-3_summary.md), [Phases 3b–6](docs/phase3b-6_summary.md).
+Summaries: [Phases 1–3](docs/phase1-3_summary.md), [Phases 3b–6](docs/phase3b-6_summary.md). Component-by-component comparison: [conventional vs modern](docs/conventional_vs_modern.md).
 
 ## Setup
 
