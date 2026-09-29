@@ -229,3 +229,89 @@ TensorRT 10.16, static batch 2.
 | D2 (R6) | TensorRT FP16 − PyTorch FP32 mean argmax keypoint error, test2 left every 5th frame (paired, trajectory-clustered) | upper bound ≤ +0.25 px |
 | D3 | C++ runtime reproduces the Python reference on goldens (MAP fit, Kalman filter, triangulation, engine outputs) | all parity tests pass at stated tolerances |
 | D4 (R3) | C++ end-to-end latency per stereo pair (H2D, TensorRT FP16, D2H, gated MAP ×4, Kalman, triangulation), ≥ 1,000 frames, video decode excluded and reported separately | p99 < 33 ms |
+
+---
+
+# Validation Plan: v3 Phase C (kinematics-fused 3D tool state), pre-specified 2026-09-28
+
+Committed before any v3 number is computed on the test2 trajectories. Plan:
+[v3 plan](../project_plan_v3.md). Development record:
+[v3_progress.md](v3_progress.md). All design choices were made on train (0–17: tool geometry
+priors) and tune (18, 19, 20, 23: everything else).
+
+## Prior exposure, stated plainly
+
+- **test2 is being used a second time.** The v2 stage-2 evaluation ran on it once (`f2c2509`),
+  and v3 exists because v2's S1 failed there, with the error almost entirely along the viewing ray.
+  So v3's *direction* was motivated by a test2 result. No v3 component (kinematics, calibration,
+  fusion, hybrid) has been computed on any test2 trajectory.
+- **Trajectory 21 (test2) was looked at during method discussions:** heatmap peaks, a MAP trace,
+  Kalman traces, an SGM example, and its rectification offset. None of these involved kinematics
+  or the Phase C method.
+- **Tool types:** long-jaw instruments were discovered on train (17) and tune (18, 19). Whether
+  test2 contains them is unknown, which is why the subgroup below is pre-specified.
+
+## Method under test
+
+For each arm, causally (frame i uses frames 0..i only; the code is `src/surgscene/fusion.py`):
+
+1. **Calibration**, refitted every 15 frames after a 30-frame warm-up:
+   - hand-eye by robust rigid registration of the kinematic pivot (`api_cp`) to per-frame
+     triangulated vision pivots;
+   - then the tool geometry (tip-midpoint offset; wrist L, b, ax) by robust reprojection LM with
+     the hand-eye fixed, using train-fitted priors (`configs/tool_geometry.json`, sha256
+     `efff97598918ef94`).
+2. **Per-frame state** (iterated EKF, Cauchy-robust): a kinematic correction δ, mean-reverting and
+   constrained to be lateral (δ·ray = 0, sd 0.5 mm), plus the signed jaw half-opening h.
+3. **Output ("hybrid"):** each jaw tip is triangulated from the v2 Kalman 2D detections of both
+   eyes, with a Gaussian depth prior (sd 5 mm) along the viewing ray centred on the fused point.
+   Covariance = inverse Hessian × κ.
+4. Before the first calibration (the first second), the v2 estimate is used.
+
+Configuration: `configs/v3_fusion_selected.json` (sha256 `f409b1a40ec23b43`), κ = 10.4649.
+Inputs are unchanged from stage 2: same keypoint model, gated MAP and Kalman parameters
+(`configs/stage2_selected.json`). Script: `scripts/eval_v3c.py --split test2`, run once.
+
+Unit of analysis = trajectory (12). Trajectory-clustered bootstrap, 2,000 replicates, percentile
+CIs. Frames and exclusions are as for S1: every 5th frame, GT stereo pairs with reprojection RMS
+> 3 px excluded, and tip = the midpoint of the two jaw tips.
+
+## Endpoints and acceptance criteria
+
+| ID | Endpoint (test2) | Criterion | Tune (in-sample) |
+|---|---|---|---|
+| C1 (primary, R1) | Mean 3D tip error, hybrid (all frames; v2 fills the warm-up) | upper 95% bound ≤ 5.0 mm | 6.86 [3.96, 9.50] |
+| C2 | 3D tip error, hybrid − v2 (paired) | upper bound < 0 | −8.38 [−14.50, −0.90] |
+| C3 (R7) | Coverage of the κ-inflated 95% ellipsoid (post-warm-up) | lower bound ≥ 0.85 and point ≤ 0.99 | 0.950 [0.914, 0.974] (κ fitted here) |
+| C4 | Fused jaw pivot 3D error (post-warm-up) | upper bound ≤ 5.0 mm | 3.11 [2.65, 3.60] |
+| C6 | 2D left-image tip error, hybrid − v2 (non-inferiority, so a depth gain can't hide a lateral loss) | upper bound ≤ +0.5 px | −0.33 [−1.19, 0.23] |
+| Subgroup (pre-specified, report) | C1 and C2 for long-jaw vs standard arm-trajectories (online-estimated tip offset > 15 mm at the last calibration; cluster = trajectory-arm) | report with CIs | long −4.5 [−16.0, 3.5]; standard −12.2 [−22.6, −4.3] |
+| Reported | C5 tip-swap rate (> 3 mm) hybrid vs v2; depth/lateral split; 2D errors; post-warm-up only; per-trajectory calibration | report only | swaps 0.003 vs 0.043 |
+
+**C1 is the R1 requirement, not a tuned threshold. It's expected to fail:** the upper bound on tune
+is 9.5 mm. Part of every 3D number is reference noise: the GT tips are triangulated from hand labels
+with the same 5.5 mm baseline, with a depth std of about 1.8 mm (median) on tune. C2 is the
+engineering claim: kinematics fixes the depth failure that made S1 fail. C3 checks κ out of
+sample. Trajectory 18 (long-jaw) is worse than v2 on tune, even with an oracle calibration. The
+subgroup is there to test whether that generalizes.
+
+The plan's C5 (tip swaps) is demoted to "reported" because its tune base rate is too low for a
+useful criterion.
+
+## Sensitivity check (tune, before freezing)
+
+`scripts/eval_fusion.py --grid` (output `runs/v3_fusion/results_grid.json`), with one parameter varied
+at a time around the frozen defaults. Numbers are the causal fusion tip-midpoint error after the warm-up, mean in mm:
+
+| Parameter | Values tried | Range of mean error |
+|---|---|---|
+| sig_kin × τ | {1, 2, 4} mm × {10, 30, 100} frames | 6.72–6.73 |
+| Warm-up | 15, 30, 60 frames | 6.63–6.74 (all frames: 6.82–7.17) |
+| sig_ray | 0.2, 0.5, 2.0 mm | 6.65–6.72 (unconstrained: 7.30) |
+| Refit interval | 5, 15, 45 frames | 6.61–6.80 |
+| Hybrid depth-prior sd | 2, 5 mm | 6.69–6.75 |
+
+The defaults aren't on a cliff, and they were kept as set; nothing was selected from this grid.
+The per-frame parameters barely matter. The error is set by the calibration (hand-eye + tool
+geometry) and the tool model, not by the per-frame filter. The one structural choice that
+matters, constraining δ laterally, was made before the grid.

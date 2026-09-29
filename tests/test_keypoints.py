@@ -25,3 +25,17 @@ def test_focal_loss_prefers_correct_heatmap():
     good = torch.logit(target.clamp(1e-3, 1 - 1e-3))
     bad = torch.logit(torch.from_numpy(render_heatmaps(np.array([[5.0, 5.0]]), 32, 32))[None].clamp(1e-3, 1 - 1e-3))
     assert focal_loss(good, target) < focal_loss(bad, target)
+
+
+def test_focal_argmax_positive_exists_for_subpixel_keypoints():
+    # keypoint at a pixel corner: no pixel reaches 0.99, so the threshold rule has no positive
+    target = torch.from_numpy(render_heatmaps(np.array([[16.5, 16.5], [np.nan, np.nan]]), 32, 32))[None]
+    assert target[0, 0].max() < 0.99
+    logits = torch.full_like(target, -4.6)
+    # a higher peak logit must lower the loss under "argmax"; under "threshold" the peak is only a negative
+    hi = logits.clone()
+    hi[0, 0, 16, 16] = 4.0
+    assert focal_loss(hi, target, pos_mode="argmax") < focal_loss(logits, target, pos_mode="argmax")
+    assert focal_loss(hi, target, pos_mode="threshold") >= focal_loss(logits, target, pos_mode="threshold")
+    # the empty (unlabeled) channel contributes no positive
+    assert focal_loss(logits, target, pos_mode="argmax").isfinite()

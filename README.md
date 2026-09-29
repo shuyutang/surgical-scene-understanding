@@ -2,6 +2,8 @@
 
 A practice project in surgical perception. The plan is in
 [project_plan_v2.md](project_plan_v2.md).
+The next iteration (foundation backbone, learned stereo, kinematics-fused factor graph) is planned in
+[project_plan_v3.md](project_plan_v3.md).
 Pre-specified acceptance criteria are in [docs/validation_plan.md](docs/validation_plan.md).
 
 | Phase | What | Data | Status |

@@ -31,7 +31,7 @@ class Rectifier:
         self.s = 0.5 if half else 1.0
         S = np.diag([self.s, self.s, 1.0])
         self.P1, self.P2 = S @ P1, S @ P2
-        self.R1 = R1
+        self.R1, self.R2 = R1, R2
         size = (int(W * self.s), int(H * self.s))
         self.mapL = cv2.initUndistortRectifyMap(rig.left.K, rig.left.dist, R1, self.P1, size, cv2.CV_32FC1)
         self.mapR = cv2.initUndistortRectifyMap(rig.right.K, rig.right.dist, R2, self.P2, size, cv2.CV_32FC1)
@@ -46,6 +46,10 @@ class Rectifier:
     def left_px_to_rect(self, u: np.ndarray) -> np.ndarray:
         u = np.asarray(u, np.float64).reshape(-1, 1, 2)
         return cv2.undistortPoints(u, self.rig.left.K, self.rig.left.dist, R=self.R1, P=self.P1).reshape(-1, 2)
+
+    def right_px_to_rect(self, u: np.ndarray) -> np.ndarray:
+        u = np.asarray(u, np.float64).reshape(-1, 1, 2)
+        return cv2.undistortPoints(u, self.rig.right.K, self.rig.right.dist, R=self.R2, P=self.P2).reshape(-1, 2)
 
     def cam_to_rect(self, X: np.ndarray) -> np.ndarray:
         return X @ self.R1.T

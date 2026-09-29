@@ -68,7 +68,7 @@ def main():
             x, hm = x.cuda(non_blocking=True), hm.cuda(non_blocking=True)
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 logits = model(x)
-            loss = focal_loss(logits.float(), hm)
+            loss = focal_loss(logits.float(), hm, pos_mode=cfg.get("focal_pos", "threshold"))
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()

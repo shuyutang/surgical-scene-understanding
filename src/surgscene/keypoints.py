@@ -129,10 +129,20 @@ class KeypointDataset(Dataset):
         return normalize(img), torch.from_numpy(hm), torch.from_numpy(kp.astype(np.float32)), i
 
 
-def focal_loss(logits: torch.Tensor, target: torch.Tensor, alpha: float = 2.0, beta: float = 4.0) -> torch.Tensor:
-    """CenterNet penalty-reduced focal loss on Gaussian heatmap targets."""
+def focal_loss(logits: torch.Tensor, target: torch.Tensor, alpha: float = 2.0, beta: float = 4.0,
+               pos_mode: str = "threshold") -> torch.Tensor:
+    """CenterNet penalty-reduced focal loss on Gaussian heatmap targets.
+
+    pos_mode "threshold" (v2): positives are pixels with target >= 0.99. The targets are rendered
+    at sub-pixel keypoint positions, so the nearest pixel reaches 0.99 only within 0.35 px of the
+    label: two thirds of training keypoints get no positive at all. "argmax" (v3 A0): the peak
+    pixel of every rendered channel is the positive."""
     p = logits.sigmoid().clamp(1e-4, 1 - 1e-4)
-    pos = target.ge(0.99).float()
+    if pos_mode == "argmax":
+        peak = target.amax((-2, -1), keepdim=True)
+        pos = (target.eq(peak) & peak.gt(0.5)).float()
+    else:
+        pos = target.ge(0.99).float()
     pos_loss = -((1 - p) ** alpha) * torch.log(p) * pos
     neg_loss = -((1 - target) ** beta) * (p**alpha) * torch.log(1 - p) * (1 - pos)
     return (pos_loss.sum() + neg_loss.sum()) / pos.sum().clamp(min=1)
