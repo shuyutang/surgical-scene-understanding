@@ -85,7 +85,7 @@ used by v2 stage 2 and again by v3 (disclosed in each pre-registration). SERV-CT
 ## Scene semantics: phase and step recognition (GraSP, separate track)
 
 Not one of R1–R7: it answers "what is happening" rather than "where is the instrument".
-Report: [grasp_test_report.md](grasp_test_report.md).
+Reports: [grasp_test_report.md](grasp_test_report.md), [grasp_round2_report.md](grasp_round2_report.md).
 
 | Test | Data | Result | Verdict |
 |---|---|---|---|
@@ -93,6 +93,11 @@ Report: [grasp_test_report.md](grasp_test_report.md).
 | GraSP S2: step macro-F1, MS-TCN − per-frame (ResNet-50) | GraSP test | +0.137 [+0.079, +0.224] | PASS |
 | GraSP S3: step macro-F1, fine-tuned Qwen3-VL-8B − DINOv2 MS-TCN | GraSP test | −0.259 [−0.363, −0.159] | report |
 | GraSP S4: phase macro-F1, DINOv2 − ResNet-50 | GraSP test | +0.046 [−0.036, +0.120] | FAIL |
+| GraSP S5: step macro-F1, EndoSSL − DINOv2 (both MS-TCN) | GraSP test (2nd) | −0.230 [−0.300, −0.156] | FAIL |
+| GraSP ST1: action macro-F1, fine-tuned Qwen3-VL − DINOv2 head (GT instances) | GraSP short-term test (1st) | −0.095 [−0.117, −0.065] | FAIL |
+| GraSP ST2: instrument macro-F1, fine-tuned Qwen3-VL − DINOv2 head | GraSP short-term test | −0.033 [−0.063, +0.012] | FAIL |
+| GraSP ST3: action macro-F1, DINOv2 − ResNet-50 heads | GraSP short-term test | +0.027 [+0.001, +0.050] | PASS |
+| GraSP ST4: action macro-F1, + previous-second crop − single frame (DINOv2) | GraSP short-term test | +0.002 [−0.021, +0.025] | FAIL |
 
 ## R2: segmentation (Phase 1, SISVSE internal, EndoVis18 external)
 

@@ -34,6 +34,8 @@ else held fixed.
 | Scene semantics: steps, backbone (GraSP) | ResNet-50 (ImageNet), frozen, + causal MS-TCN | DINOv2 ViT-B/14, frozen, same MS-TCN | Step macro-F1 0.401 → **0.469**; +0.067 [+0.039, +0.096], 5/5 cases | S1, GraSP test (1st) | **Modern** |
 | Scene semantics: steps, temporal model | Per-frame linear probe | Causal MS-TCN (learned temporal model) | +0.137 [+0.079, +0.224] (ResNet-50); +0.136 on DINOv2 | S2, GraSP test | **Temporal model** |
 | Scene semantics: phases, backbone | ResNet-50 + MS-TCN | DINOv2 + MS-TCN | Phase macro-F1 +0.046 [−0.036, +0.120], 4/5 cases | S4, GraSP test | **Neither shown** |
+| Scene semantics: steps, surgical SSL backbone | DINOv2 (general) + MS-TCN | EndoSSL ViT-L/16 (laparoscopy MSN) + same MS-TCN | Step macro-F1 0.469 → 0.238; −0.230 [−0.300, −0.156], 0/5 cases | GraSP S5, test (2nd) | **General-domain foundation model** |
+| Scene semantics: instrument actions (per GT instance) | DINOv2 crop features + MLP | Qwen3-VL-8B, QLoRA, box drawn on the frame | Action macro-F1 0.273 → 0.178; −0.095 [−0.117, −0.065]; instrument type 0.818 vs 0.785 (−0.033 [−0.063, +0.012]) | GraSP ST1, ST2 | **Frozen features + classifier** |
 | Scene semantics: VLM | DINOv2 + MS-TCN (0.466 on VLM frames) | Qwen3-VL-8B per frame, QLoRA-fine-tuned (zero-shot: 0.025) | 0.206; −0.259 [−0.363, −0.159], 0/5 cases | S3, GraSP test | **Frozen features + temporal model** |
 
 ## Cost side

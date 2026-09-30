@@ -2,6 +2,8 @@
 
 **Status (2026-09-29): done.** Endpoints frozen in `docs/validation_plan.md` and run once on
 test: S1 and S2 pass, S4 fails, S3 reported. Results: [grasp_test_report.md](../grasp_test_report.md).
+Round 2 (EndoSSL backbone S5; instrument and action recognition ST1–ST4): S5, ST1, ST2, ST4 fail,
+ST3 passes. Results: [grasp_round2_report.md](../grasp_round2_report.md).
 
 A separate track from the 3D pipeline: GraSP is monocular, with no stereo, depth or kinematics,
 and SurgPose has no workflow labels, so the two can't be evaluated jointly. The question is the

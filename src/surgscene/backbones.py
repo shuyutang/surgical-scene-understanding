@@ -8,7 +8,8 @@ instance-level (crop) feature scripts.
                its weights equal the official JAX checkpoint). It takes raw 0-255 RGB, no
                normalisation: that reproduces the official TF SavedModel (cosine 0.9998 on the CLS
                output). [CLS, mean patch token] after the final norm, 2048-d
-All take a 224 x 224 input.
+All take a 224 x 224 input. EndoSSL weights (gitignored), from the link in the SurgVISTA readme:
+  uvx gdown 1bazW3W5Cglzfeeh_pdJALLktfxpateJ6 -O third_party/endossl/surgvista_teacher.pth
 """
 
 from pathlib import Path

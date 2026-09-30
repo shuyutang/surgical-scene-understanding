@@ -31,6 +31,6 @@ component by component.
 | v3 | [v3_progress.md](v3_progress.md) (steps 1–7), [v3c_test_report.md](v3c_test_report.md), [v3b_servct_report.md](v3b_servct_report.md), [v3a_test_report.md](v3a_test_report.md), [v3_step5_e1_b5_report.md](v3_step5_e1_b5_report.md) |
 | v4 | [v4_step0_sam2_feasibility.md](v4_step0_sam2_feasibility.md), [v4_report.md](v4_report.md) |
 | v5 | [v5_step0_stereo_tip.md](v5_step0_stereo_tip.md), [v5_step1_tissue_memory.md](v5_step1_tissue_memory.md) (development); [v5_step2_fast_foundationstereo.md](v5_step2_fast_foundationstereo.md) (B6 on SERV-CT) |
-| Scene semantics | [grasp_test_report.md](grasp_test_report.md) (GraSP phase and step recognition) |
+| Scene semantics | [grasp_test_report.md](grasp_test_report.md) (GraSP phases and steps), [grasp_round2_report.md](grasp_round2_report.md) (EndoSSL backbone; instrument and action recognition, VLM vs frozen features) |
 
 The `*_results.json` files next to some reports are the raw outputs the reports quote.

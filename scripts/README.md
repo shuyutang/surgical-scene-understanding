@@ -22,8 +22,9 @@ test say so; they were run once on the test split, after the pre-registration wa
 | | `v4_tool_library.py`, `v4_dev_fusion.py`, `eval_v4.py` | Instrument-type library (train), development variants (tune), pre-registered M1–M5 |
 | Scene semantics | `grasp_prepare.py` | Frozen GraSP split and label arrays (official labels) |
 | | `grasp_features.py`, `grasp_tcn.py` | Frozen ResNet-50 / DINOv2 frame features; causal MS-TCN and linear probes (development grid, final training) |
-| | `grasp_vlm.py`, `eval_grasp.py` | Qwen3-VL-8B zero-shot and QLoRA; development comparison and pre-registered S1–S4 |
+| | `grasp_vlm.py`, `eval_grasp.py` | Qwen3-VL-8B zero-shot and QLoRA (steps, or instances with `--task instances`); development comparison, pre-registered S1–S5 |
+| | `grasp_shortterm.py`, `eval_grasp_shortterm.py` | Short-term: crop features, MLP heads for instrument and actions per GT instance; pre-registered ST1–ST4 |
 | **v5** | `v5_dev_stereo_tip.py`, `v5_tissue_memory.py` | Development only: stereo (RAFT or Fast-FoundationStereo) on instrument jaws; tissue memory |
 
 Shared logic lives in the package (`surgscene.pipeline`, `surgscene.kp_eval`,
-`surgscene.rectification`, `surgscene.video`, `surgscene.phase`, `surgscene.learned_stereo`), not in the scripts.
+`surgscene.rectification`, `surgscene.video`, `surgscene.phase`, `surgscene.learned_stereo`, `surgscene.backbones`, `surgscene.grasp_st`), not in the scripts.

@@ -23,7 +23,8 @@ p99 latency < 33 ms (R3), calibrated uncertainty (R7). Full requirement → test
 | v4 | Jaw-length constraint for long-jaw instruments (SAM 2 masks tried, dropped) | 4.82 [3.63, 6.21] mm; primary endpoint failed (one misclassified arm) |
 | v5 | Occlusion-aware tissue memory (development) | Hidden-tissue depth 2.54 → 1.28 mm vs a local plane; tip error still dominates distance |
 | v5 B6 | Fast-FoundationStereo vs RAFT-Stereo, tissue depth (SERV-CT) | 1.86 → 1.37 mm, −0.49 [−0.95, −0.09]; 2× faster; on instrument jaws median 4.0 mm at GT pixels (RAFT 12.9) |
-| Scene semantics | Phase / step recognition on GraSP (5 test cases) | Step macro-F1: DINOv2 + causal MS-TCN **0.469**, ResNet-50 + MS-TCN 0.401, per-frame 0.26–0.33, fine-tuned Qwen3-VL-8B 0.21 |
+| Scene semantics | Phase / step recognition on GraSP (5 test cases) | Step macro-F1: DINOv2 + causal MS-TCN **0.469**, ResNet-50 + MS-TCN 0.401, EndoSSL (surgical SSL) + MS-TCN 0.238, per-frame 0.26–0.33, fine-tuned Qwen3-VL-8B 0.21 |
+| Scene semantics, short-term | Instrument type and actions per instance (GraSP keyframes, GT boxes) | DINOv2 features + MLP: instrument 0.818, actions 0.273 macro-F1; fine-tuned Qwen3-VL-8B 0.785 / 0.178 |
 | Deploy | ONNX → TensorRT FP16, C++ runtime | U-Net path p99 2.6 ms end to end (without stereo); DINOv2 engine 4.4 ms, +0.08 px from FP16 |
 
 Summary of what worked, component by component: [docs/conventional_vs_modern.md](docs/conventional_vs_modern.md).
@@ -45,7 +46,7 @@ fusing the robot's kinematics. **R1 is not met overall**; the evaluation set has
 
 ```bash
 uv sync -p 3.12                       # Python 3.12, PyTorch 2.8 (CUDA 12.8 wheels)
-uv run --group dev pytest             # 47 unit tests; no data needed
+uv run --group dev pytest             # 51 unit tests; no data needed
 ```
 
 Optional dependency groups: `stereo` (RAFT-Stereo, Fast-FoundationStereo), `sam` (SAM 2 via
@@ -73,7 +74,8 @@ terms before use.
 | GraSP (1 fps) | Phase and step recognition (scene-semantics track) | github.com/BCV-Uniandes/GraSP (Google Drive) | no data license stated; research use |
 
 Pretrained models: DINOv2 (Apache 2.0, via `timm`), SAM 2.1 (Apache 2.0, via `transformers`),
-RAFT-Stereo (MIT), Qwen3-VL-8B-Instruct (Apache 2.0), torchvision ResNet-50 (BSD).
+RAFT-Stereo (MIT), Qwen3-VL-8B-Instruct (Apache 2.0), torchvision ResNet-50 (BSD), EndoSSL ViT-L/16
+(PyTorch conversion released with SurgVISTA; checkpoint license not stated, research use).
 Fast-FoundationStereo's code and research checkpoints are under NVIDIA's **research-only
 (non-commercial)** license. TensorRT is installed from NVIDIA's pip wheels under NVIDIA's license.
 
@@ -123,6 +125,13 @@ uv run python scripts/grasp_tcn.py dev && uv run python scripts/grasp_tcn.py fin
 uv run --group vlm python scripts/grasp_vlm.py train --tag final_ft --cases <8 train cases> --stride 10
 uv run --group vlm python scripts/grasp_vlm.py predict --tag test_ft --adapter runs/grasp_vlm/final_ft/adapter --cases <test cases> --stride 5
 uv run python scripts/eval_grasp.py test                     # once
+# round 2: EndoSSL backbone (S5), short-term instrument and action recognition (ST1-ST4)
+uv run python scripts/grasp_features.py --backbone endossl_l16   # weights: see src/surgscene/backbones.py
+uv run python scripts/grasp_tcn.py dev --backbones endossl_l16 && uv run python scripts/grasp_tcn.py final --backbones endossl_l16
+uv run python scripts/grasp_shortterm.py feats && uv run python scripts/grasp_shortterm.py dev && uv run python scripts/grasp_shortterm.py final
+uv run --group vlm python scripts/grasp_vlm.py train --task instances --tag st_final_ft --split train
+uv run --group vlm python scripts/grasp_vlm.py predict --task instances --tag st_test_ft --adapter runs/grasp_vlm/st_final_ft/adapter --split test
+uv run python scripts/eval_grasp.py test-s5 && uv run python scripts/eval_grasp_shortterm.py test   # once
 
 # deployment: TensorRT FP16 engines, C++ runtime and latency benchmark
 uv sync --group deploy && cpp/scripts/fetch_deps.sh
