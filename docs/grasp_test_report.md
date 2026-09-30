@@ -1,6 +1,6 @@
 # Scene semantics on GraSP: test report (phase and step recognition), 2026-09-29
 
-Pre-registration: `docs/validation_plan.md`, "scene semantics on GraSP" (commit `31f51d7`). **First
+Pre-registration: `docs/validation_plan.md`, "scene semantics on GraSP" (commit `d6fa43e`). **First
 use of the GraSP test split** (5 cases, 42,897 frames at 1 fps). Plan and arms:
 [plans/plan_scene_semantics.md](plans/plan_scene_semantics.md). Run once:
 `scripts/eval_grasp.py test` → `runs/grasp_test/`.
