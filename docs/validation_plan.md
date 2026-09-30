@@ -558,3 +558,118 @@ of bootstrap resamples contain neither, so its upper bound would be 0 by constru
 excess.
 
 Run once, after this section is committed: `uv run python scripts/eval_v4.py --split test2`.
+
+---
+
+# Validation Plan: scene semantics on GraSP (phase and step recognition), pre-specified 2026-09-29
+
+Committed before any model output is computed on a GraSP test case. Plan and arms:
+`docs/plans/plan_scene_semantics.md`.
+
+## Prior exposure, stated plainly
+
+**First use of the GraSP test split** (5 cases, CASE041, 047, 050, 051, 053; 42,897 frames; split
+hash `6fb97152f3d58a5b`). Test frames have been read only to extract frozen backbone features
+(`scripts/grasp_features.py`, no labels involved); no prediction has been made on them. Labels
+are the official December 2024 revision (`splits/grasp_split.json`).
+
+## Development (train cases only, official folds)
+
+- **Temporal arms** (`scripts/grasp_tcn.py dev`, `runs/grasp_dev/report.md`): both fold
+  directions × 3 seeds, held-out metric every 25 epochs up to 300. Per (backbone, model) the class
+  weighting and epoch count with the highest mean held-out step macro-F1 were selected:
+
+  | Arm | Config | Held-out step F1 | Phase F1 |
+  |---|---|---|---|
+  | A: ResNet-50 + causal MS-TCN | sqrt_inv, 100 epochs | 0.349 | 0.570 |
+  | A0: ResNet-50 + linear probe | sqrt_inv, 75 epochs | 0.285 | 0.451 |
+  | B: DINOv2 ViT-B/14 + causal MS-TCN | sqrt_inv, 200 epochs | 0.403 | 0.634 |
+  | B0: DINOv2 ViT-B/14 + linear probe | sqrt_inv, 300 epochs | 0.345 | 0.527 |
+
+- **VLM arm** (Qwen3-VL-8B-Instruct, `scripts/grasp_vlm.py`; comparison in
+  `runs/grasp_dev_compare/report.md`, fold1 → fold2, every 10th frame):
+  - zero-shot, bf16: step F1 0.006; it answers "Denonvilliers_Fascia, Denon_Dissection" for
+    almost every frame. 4-bit zero-shot: 0.008.
+  - QLoRA fine-tuned on fold1 (every 5th frame, 7,682 samples, 1 epoch): step F1 0.229, phase F1
+    0.435 (B on the same frames: 0.403 / 0.620).
+  - Causal majority smoothing over 30–300 s lowers step F1 for every VLM run, so the frozen
+    window is **0 s** (raw answers) for both zero-shot and fine-tuned.
+
+## Frozen configuration (`configs/grasp_selected.json`)
+
+- A, A0, B, B0: selected configs above, trained on all 8 train cases, 3 seeds each
+  (`runs/grasp_final/`); the prediction is the arg max of the mean of the 3 seeds' probabilities.
+- C, fine-tuned: QLoRA adapter trained on all 8 train cases, every 10th frame (1 epoch, same
+  hyperparameters as development; 7,366 samples, 460 steps): `runs/grasp_vlm/final_ft/adapter`
+  (`adapter_model.safetensors` sha256 prefix `350271e9b8282fa8`).
+- C, zero-shot: bf16, the prompt in `scripts/grasp_vlm.py` (`zero_shot_prompt`).
+- VLM test frames: every 5th frame of each test case (8,582 frames). Unparsed answers count as
+  wrong.
+
+## Endpoints (5 test cases; unit = case; paired case-level bootstrap, 2,000 replicates)
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| S1 (primary) | Step macro-F1, B − A (backbone effect, both causal MS-TCN), all frames | LB > 0 |
+| S2 | Step macro-F1, A − A0 (temporal model effect), all frames | LB > 0 |
+| S3 | Step macro-F1, fine-tuned VLM − B, on the VLM's frames | report with CI |
+| S4 | Phase macro-F1, B − A, all frames | LB > 0 |
+| Reported | Every arm's step / phase macro-F1 and accuracy; B − B0; zero-shot VLM; per-case values and the number of cases with a positive difference | report only |
+
+Macro-F1 per case is over the classes present in the case's ground truth or prediction.
+
+**Expectations, stated before the data:** development says S2 (+0.064) and S1 (+0.054) are
+positive, and S3 is strongly negative (−0.17). With 5 cases, a true effect of ~0.05 may still
+produce a lower bound below 0; a FAIL there means "not shown on 5 cases", not "no effect".
+
+## Run order
+
+1. `uv run --group vlm python scripts/grasp_vlm.py predict --tag test_zs_bf16 --cases <test> --stride 5 --batch 16`
+2. `uv run --group vlm python scripts/grasp_vlm.py predict --tag test_ft --adapter runs/grasp_vlm/final_ft/adapter --cases <test> --stride 5 --batch 16`
+3. `uv run python scripts/eval_grasp.py test`, once. Results are committed as they come out.
+
+---
+
+# Validation Plan: v5 step 2 (Fast-FoundationStereo vs RAFT-Stereo on SERV-CT), pre-specified 2026-09-29
+
+**Third use of SERV-CT** (B1: RAFT-Stereo `middlebury`@32 vs SGM; B5: `realtime`@4 vs SGM).
+Every model compared here was already scored there (RAFT) or has never seen SERV-CT (FFS), and no
+Fast-FoundationStereo output has been computed on SERV-CT before this commit.
+
+**Method under test:** Fast-FoundationStereo (NVIDIA, 2026; a distilled FoundationStereo;
+research-only license), zero-shot, fp16, `max_disp` 192. The checkpoint was selected on SurgPose
+tune by the same rule as B1 (lowest photometric error on tissue around the tips,
+`scripts/eval_stereo_tune.py --select-prefix ffs:`, `runs/v5_ffs_tune/report.md`), among the
+three checkpoints documented in its readme: **`23-36-37` at 8 iterations**.
+
+| Model (SurgPose tune, 32 frames) | Photometric error | Plane scatter (mm) | ms / half-res pair* |
+|---|---|---|---|
+| SGM | 12.56 | 5.42 | 12 |
+| RAFT `middlebury`@32 | 12.97 | 1.54 | 475 |
+| RAFT `realtime`@4 | 13.11 | 1.66 | 55 |
+| FFS `23-36-37`@8 | 12.95 | 1.29 | 93 |
+| FFS `23-36-37`@4 | 12.96 | 1.30 | 79 |
+| FFS `20-26-39`@8 | 12.98 | 1.15 | 79 |
+| FFS `20-30-48`@4 | 12.96 | 1.30 | 57 |
+
+\*Timed while another job was using the GPU; latency is re-measured in the test run on an idle
+GPU. The photometric proxy separates the learned models by < 0.2 gray levels, so the selection is
+weak. A fourth checkpoint in the release (`15-44-51`) is not in the readme and its configuration
+lacks a key the code needs; it was dropped without being run.
+
+**Comparator:** RAFT-Stereo `middlebury`@32, the model validated in B1. Both use the B3
+vertical-offset rule.
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| B6 (primary) | Mean absolute depth error (mm) on all valid pixels, FFS − RAFT `middlebury`@32 (paired over the 16 pairs, bootstrap) | upper 95% bound < 0 |
+| Reported | Each model's depth MAE; bad-pixel (> 3 px) and disparity-EPE differences; FFS − SGM with the B1 protocol; per-experiment numbers; latency on one 720×576 pair | report only |
+
+Limits, as in B1: 16 pairs from 2 specimens (per-experiment numbers reported), and the B1 RAFT
+error is already low (1.86 mm on all valid pixels), so a real but small improvement may not be
+detectable.
+
+Script: `uv run --group stereo python scripts/eval_servct.py --method ffs:23-36-37@8 --reference middlebury@32`, run once.
+
+The instrument-jaw check of v5 step 0 (tune, development only) is repeated with FFS:
+`scripts/v5_dev_stereo_tip.py --models middlebury@32 ffs:23-36-37@8 --out runs/v5_ffs_tip`.

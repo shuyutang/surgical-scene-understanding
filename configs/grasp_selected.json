@@ -1,0 +1,8 @@
+{
+ "note": "GraSP test configuration, frozen 2026-09-29 before any test-case output (docs/validation_plan.md, scene semantics). Temporal arms: runs/grasp_dev/selected.json, trained on all 8 train cases by scripts/grasp_tcn.py final.",
+ "vlm_test_stride": 5,
+ "vlm_zero_shot_tag": "test_zs_bf16",
+ "vlm_finetuned_tag": "test_ft",
+ "vlm_finetuned_adapter": "runs/grasp_vlm/final_ft/adapter",
+ "vlm_window_s": {"zero_shot": 0, "finetuned": 0}
+}

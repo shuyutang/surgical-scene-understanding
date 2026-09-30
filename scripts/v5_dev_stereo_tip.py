@@ -1,6 +1,7 @@
 """v5 step 0 (development, tune only): instrument tip depth from dense learned stereo on jaw pixels.
 
   uv run --group stereo --group sam python scripts/v5_dev_stereo_tip.py [--every 10]
+  ... --models middlebury@32 ffs:23-36-37@8 --out runs/v5_ffs_tip    # v5 step 2
 
 Keypoint triangulation is limited by independent 2-3 px detections in each eye (1 px of disparity
 ~ 3.7 mm of depth at 200 mm on this rig); dense stereo matches sub-pixel over whole regions. Per
@@ -25,7 +26,7 @@ import cv2
 import numpy as np
 
 from surgscene.fusion import ARMS, FusionParams
-from surgscene.learned_stereo import LearnedStereo
+from surgscene.learned_stereo import make_stereo
 from surgscene.pipeline import causal_types, hybrid, hybrid_length, load_prepared, run
 from surgscene.proximity import Rectifier
 from surgscene.rectification import shift_rows, sift_dy
@@ -40,7 +41,7 @@ OUT = ROOT / "runs/v5_dev"
 TUNE = [18, 19, 20, 23]
 BAND, T0 = 50.0, 0.2
 V4 = json.loads((ROOT / "configs/v4_selected.json").read_text())
-MODELS = {"realtime@4": ("realtime", 4), "middlebury@32": ("middlebury", 32)}
+MODELS = ["realtime@4", "middlebury@32"]  # learned_stereo.make_stereo names
 
 
 def read_pair(traj, t):
@@ -95,9 +96,12 @@ def jaw_tip_from_disparity(d, rect, mask, u_piv, u_mid):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--every", type=int, default=10)
+    ap.add_argument("--models", nargs="+", default=MODELS)
+    ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
-    OUT.mkdir(parents=True, exist_ok=True)
-    nets = {k: LearnedStereo(c, iters=i) for k, (c, i) in MODELS.items()}
+    out = ROOT / args.out
+    out.mkdir(parents=True, exist_ok=True)
+    nets = {k: make_stereo(k) for k in args.models}
     sift = cv2.SIFT_create(4000)
     p = FusionParams(**V4["fusion"])
     rows = {}
@@ -146,7 +150,7 @@ def main():
                                 "median": float(np.median([x[0] for x in v]))} for k, v in e.items()}
                       for arm, e in errs.items()}
         print(traj, json.dumps({arm: {k: round(v["err"], 2) for k, v in r.items()} for arm, r in rows[traj].items()}), flush=True)
-    (OUT / "results.json").write_text(json.dumps(rows, indent=1))
+    (out / "results.json").write_text(json.dumps(rows, indent=1))
     methods = list(next(iter(next(iter(rows.values())).values())))
     L = ["# v5 step 0: tip depth from dense stereo on jaw pixels (tune, development)", "",
          f"Every {args.every}th frame; frames where all methods have an estimate (paired). Mean 3D tip-midpoint error, mm "
@@ -158,7 +162,7 @@ def main():
                      " | ".join(f"{m[k]['err']:.2f} ({m[k]['depth']:.2f})" for k in methods) + " |")
     means = {k: np.mean([m[k]["err"] for r in rows.values() for m in r.values()]) for k in methods}
     L.append("| **mean over arm-trajectories** | | " + " | ".join(f"**{means[k]:.2f}**" for k in methods) + " |")
-    (OUT / "report.md").write_text("\n".join(L) + "\n")
+    (out / "report.md").write_text("\n".join(L) + "\n")
     print("\n".join(L))
 
 

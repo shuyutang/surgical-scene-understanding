@@ -1,6 +1,8 @@
 """v3 Phase B, selection on SurgPose tune (18, 19, 20, 23): SGM vs RAFT-Stereo checkpoints.
 
   uv run --group stereo python scripts/eval_stereo_tune.py
+  uv run --group stereo python scripts/eval_stereo_tune.py --out runs/v5_ffs_tune \
+      --methods middlebury realtime@4 ffs:23-36-37@8 ffs:23-36-37@4 ffs:20-26-39@8 ffs:20-30-48@4 --select-prefix ffs:
 
 No depth GT on SurgPose, so proxies on tissue pixels in the annulus around each GT tip (the region
 the proximity feature uses), instruments masked, the B3 rectification correction applied to all:
@@ -10,9 +12,12 @@ the proximity feature uses), instruments masked, the B3 rectification correction
           method (low can also mean over-smoothing: secondary)
   valid   fraction of annulus pixels with a disparity
 The checkpoint with the lowest mean photometric error is selected for the SERV-CT test (B1).
-Writes runs/v3_stereo_tune/{results.json, report.md}.
+Method names follow learned_stereo.make_stereo; --select-prefix restricts the selection to the
+methods with that prefix (v5 step 2: Fast-FoundationStereo). Writes <out>/{results.json, report.md}
+(default runs/v3_stereo_tune).
 """
 
+import argparse
 import json
 import time
 from pathlib import Path
@@ -22,7 +27,7 @@ import numpy as np
 import torch
 
 from surgscene.geometry import load_stereo_ini
-from surgscene.learned_stereo import CHECKPOINTS, LearnedStereo
+from surgscene.learned_stereo import CHECKPOINTS, make_stereo
 from surgscene.proximity import TIPS, Rectifier, disparity, instrument_mask, make_sgbm, tissue_plane
 from surgscene.rectification import load_gt, shift_rows, sift_dy
 
@@ -57,8 +62,14 @@ def scatter(d, sel, rect, plane):
 
 
 def main():
-    OUT.mkdir(parents=True, exist_ok=True)
-    methods = ["sgm"] + list(CHECKPOINTS)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--methods", nargs="+", default=list(CHECKPOINTS))
+    ap.add_argument("--select-prefix", default="")
+    ap.add_argument("--out", default=str(OUT))
+    args = ap.parse_args()
+    out = ROOT / args.out
+    out.mkdir(parents=True, exist_ok=True)
+    methods = ["sgm"] + args.methods
     models = {}
     acc = {m: {"photo": [], "scatter": [], "valid": [], "ms": []} for m in methods}
     sgbm, sift = make_sgbm(), cv2.SIFT_create(4000)
@@ -88,7 +99,7 @@ def main():
 
     for m in methods:
         if m != "sgm":
-            models[m] = LearnedStereo(m)
+            models[m] = make_stereo(m)
         for traj, t, rect, a, b, gt_r in frames_data:
             t0 = time.perf_counter()
             d = disparity(sgbm, a, b) if m == "sgm" else models[m].disparity(a, b)
@@ -126,16 +137,16 @@ def main():
                     acc[m]["scatter"].append(float(scatter(d, both, rect, pl)))
     R = {m: {k: float(np.mean(v)) for k, v in acc[m].items() if not k.startswith("_") and v} |
          {"ms_median": float(np.median(acc[m]["ms"]))} for m in methods}
-    learned = [m for m in methods if m != "sgm"]
+    learned = [m for m in methods if m != "sgm" and m.startswith(args.select_prefix)]
     R["selected"] = min(learned, key=lambda m: R[m]["photo"])
-    (OUT / "results.json").write_text(json.dumps(R, indent=1))
+    (out / "results.json").write_text(json.dumps(R, indent=1))
     L = ["# Phase B selection on SurgPose tune (proxies; no depth GT)", "",
          f"{len(frames_data)} frames (8 per trajectory, 18/19/20/23), half resolution, B3 correction applied.", "",
          "| Method | Photometric error (gray levels) | Plane scatter (mm) | Valid fraction | ms / pair |", "|---|---|---|---|---|"]
     for m in methods:
         L.append(f"| {m} | {R[m]['photo']:.2f} | {R[m]['scatter']:.2f} | {R[m]['valid']:.3f} | {R[m]['ms_median']:.0f} |")
     L += ["", f"Selected for SERV-CT (lowest photometric error): **{R['selected']}**"]
-    (OUT / "report.md").write_text("\n".join(L) + "\n")
+    (out / "report.md").write_text("\n".join(L) + "\n")
     print("\n".join(L))
 
 

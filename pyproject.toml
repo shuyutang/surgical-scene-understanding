@@ -35,7 +35,16 @@ sam = [
     "transformers>=4.56",
 ]
 stereo = [
+    "einops>=0.8.2",
+    "imageio>=2.38.0",
+    "omegaconf>=2.3.1",
     "opt-einsum>=3.4.0",
+]
+vlm = [
+    "accelerate>=1.15.0",
+    "bitsandbytes>=0.50.2",
+    "peft>=0.21.1",
+    "transformers>=4.56",
 ]
 
 [tool.uv.sources]

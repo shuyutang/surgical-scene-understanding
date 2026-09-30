@@ -11,6 +11,10 @@ rule is applied to both. Depth Z = f B / d with f and B from each pair's P1/P2.
 Unit of analysis = stereo pair (16), paired bootstrap, 2,000 replicates, percentile CIs; the
 pairs come from only 2 specimens, so per-experiment numbers are reported as well.
 Writes runs/v3_servct/{results.json, report.md}.
+
+v5 step 2 (B6): --method <make_stereo name> --reference <name> scores a second learned model on
+all valid pixels against the reference (both dense): endpoint = depth MAE, method − reference,
+paired over the 16 pairs. Writes runs/v5_servct_<method>/.
 """
 
 import glob
@@ -21,7 +25,7 @@ import cv2
 import numpy as np
 
 from surgscene.evaluation import ci
-from surgscene.learned_stereo import LearnedStereo
+from surgscene.learned_stereo import LearnedStereo, make_stereo
 from surgscene.proximity import disparity, make_sgbm
 from surgscene.rectification import shift_rows, sift_dy
 
@@ -71,7 +75,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--checkpoint", help="override the tune-selected checkpoint (B5: realtime)")
     ap.add_argument("--iters", type=int, default=32)
+    ap.add_argument("--method", help="B6: a learned_stereo.make_stereo name, e.g. ffs:23-36-37@8")
+    ap.add_argument("--reference", help="B6: the model it is compared with, e.g. middlebury@32")
     args = ap.parse_args()
+    if args.method:
+        return compare(args.method, args.reference)
     global OUT
     if args.checkpoint:
         OUT = OUT.with_name(f"v3_servct_{args.checkpoint}_it{args.iters}")
@@ -122,6 +130,76 @@ def main():
          f"{R['per_experiment_Experiment_2']['net']:.2f} mm",
          f"- Vertical offset measured per pair (B3): {', '.join(f'{r['dy']:+.2f}' for r in rows)} px"]
     (OUT / "report.md").write_text("\n".join(L) + "\n")
+    print("\n".join(L))
+
+
+def compare(method: str, reference: str):
+    """B6: two learned models, both scored on all valid pixels (no SGM-coverage restriction)."""
+    import time
+
+    import torch
+    out = ROOT / f"runs/v5_servct_{method.replace(':', '_').replace('@', '_it')}"
+    out.mkdir(parents=True, exist_ok=True)
+    nets, sgbm, sift = {"method": make_stereo(method), "reference": make_stereo(reference)}, make_sgbm(num_disp=160), \
+        cv2.SIFT_create(4000)
+    rows = []
+    for exp in ("Experiment_1", "Experiment_2"):
+        for path in sorted(glob.glob(str(DATA / exp / "Left_rectified/*.png"))):
+            name = Path(path).name
+            L, R, gt, valid, f, B = load_pair(exp, name)
+            dy = float(np.median(sift_dy(sift, L, R)))
+            Rc = shift_rows(R, dy) if abs(dy) > 0.5 else R  # B3 rule
+            row = {"exp": exp, "pair": name, "dy": dy}
+            d_sgm = disparity(sgbm, L, Rc)
+            for k, net in nets.items():
+                d = net.disparity(L, Rc)
+                row[k] = pair_metrics(d, gt, valid, f, B)
+                row[f"{k}_vs_sgm"] = pair_metrics(d, gt, valid & np.isfinite(d_sgm), f, B)
+            row["sgm"] = pair_metrics(d_sgm, gt, valid & np.isfinite(d_sgm), f, B)
+            rows.append(row)
+    ms = {}
+    for k, net in nets.items():  # latency on one pair, after warm-up
+        L, R = load_pair("Experiment_1", Path(sorted(glob.glob(str(DATA / "Experiment_1/Left_rectified/*.png")))[0]).name)[:2]
+        for _ in range(3):
+            net.disparity(L, R)
+        t = []
+        for _ in range(10):
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            net.disparity(L, R)
+            torch.cuda.synchronize()
+            t.append((time.perf_counter() - t0) * 1e3)
+        ms[k] = float(np.median(t))
+    col = lambda k, m: [r[k][m] for r in rows]
+    diff = lambda m: boot_paired(np.subtract(col("method", m), col("reference", m)))
+    R = {"method": method, "reference": reference, "pairs": rows, "ms_720x576": ms,
+         "B6_depth_mae_method_minus_reference": diff("depth_mae"),
+         "bad_method_minus_reference": diff("bad"), "epe_method_minus_reference": diff("disp_epe"),
+         "depth_mae_method": boot_paired(col("method", "depth_mae")),
+         "depth_mae_reference": boot_paired(col("reference", "depth_mae")),
+         "method_minus_sgm_common": boot_paired(np.subtract(col("method_vs_sgm", "depth_mae"), col("sgm", "depth_mae")))}
+    for exp in ("Experiment_1", "Experiment_2"):
+        rr = [r for r in rows if r["exp"] == exp]
+        R[f"per_experiment_{exp}"] = {k: float(np.mean([r[k]["depth_mae"] for r in rr])) for k in ("method", "reference")}
+    b6 = R["B6_depth_mae_method_minus_reference"]
+    R["verdict_B6"] = bool(b6["hi"] < 0)
+    (out / "results.json").write_text(json.dumps(R, indent=1))
+    f = lambda d, n=2: f"{d['point']:.{n}f} [{d['lo']:.{n}f}, {d['hi']:.{n}f}]"
+    e1, e2 = R["per_experiment_Experiment_1"], R["per_experiment_Experiment_2"]
+    L = [f"# B6: {method} vs {reference} on SERV-CT (pre-specified)", "",
+         "16 pairs, all valid pixels (both models are dense), paired bootstrap over pairs.", "",
+         "| ID | Endpoint | Result [95% CI] | Criterion | Verdict |", "|---|---|---|---|---|",
+         f"| B6 | Mean abs depth error, {method} − {reference}, mm | {f(b6)} | UB < 0 | {'PASS' if R['verdict_B6'] else 'FAIL'} |",
+         "", "Reported:", "",
+         f"- Depth MAE, {method} / {reference}: {f(R['depth_mae_method'])} / {f(R['depth_mae_reference'])} mm",
+         f"- Bad pixels (> {BAD_PX:g} px), difference: {f(R['bad_method_minus_reference'], 3)}; disparity EPE difference: "
+         f"{f(R['epe_method_minus_reference'])} px",
+         f"- {method} − SGM on SGM's valid pixels (B1 protocol): {f(R['method_minus_sgm_common'])} mm",
+         f"- Per experiment ({method} / {reference}): Exp 1 {e1['method']:.2f} / {e1['reference']:.2f} mm; "
+         f"Exp 2 {e2['method']:.2f} / {e2['reference']:.2f} mm",
+         f"- Latency, one 720×576 pair, median of 10 (PyTorch, fp16/mixed precision): {method} {ms['method']:.0f} ms, "
+         f"{reference} {ms['reference']:.0f} ms"]
+    (out / "report.md").write_text("\n".join(L) + "\n")
     print("\n".join(L))
 
 
