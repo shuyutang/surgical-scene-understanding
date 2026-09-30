@@ -1,6 +1,6 @@
 # Scene semantics on GraSP, round 2: surgical SSL backbone (S5) and short-term recognition (ST1–ST4), 2026-09-29
 
-Pre-registration: `docs/validation_plan.md`, "scene semantics round 2" (commit `c2f0eef`). Round 1:
+Pre-registration: `docs/validation_plan.md`, "scene semantics round 2" (commit `aced38d`). Round 1:
 [grasp_test_report.md](grasp_test_report.md). Outputs: `runs/grasp_test_s5/`, `runs/grasp_st_test/`.
 
 **Questions.**

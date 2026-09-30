@@ -683,7 +683,7 @@ Committed before any EndoSSL prediction on a test case and before any short-term
 ## Prior exposure, stated plainly
 
 - **GraSP test cases, 2nd use.** The long-term labels (phases, steps) of the 5 test cases were used
-  once, for S1–S4 (commit `31f51d7`). Nothing here was tuned on that result.
+  once, for S1–S4 (commit `d6fa43e`). Nothing here was tuned on that result.
 - **The short-term test labels (instances, instruments, actions) have not been used.** The test
   frames were seen before, only as inputs.
 - **Surgical video foundation models:** SurgVISTA's backbone isn't released (its Hugging Face repo
