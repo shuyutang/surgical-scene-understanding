@@ -99,7 +99,7 @@ Optional groups:
 Third-party model code goes in `third_party/` (gitignored); the fetch commands are in
 [src/surgscene/learned_stereo.py](src/surgscene/learned_stereo.py) and
 [src/surgscene/backbones.py](src/surgscene/backbones.py). Every experiment's commands are in
-[scripts/README.md](scripts/README.md#reproducing).
+[scripts/README.md](scripts/README.md#reproducing), including the C++ runtime build.
 
 **Data** (not redistributed; place under `data/`, check each dataset's terms):
 
@@ -116,7 +116,9 @@ Third-party model code goes in `third_party/` (gitignored); the fetch commands a
 - BSD: torchvision ResNet-50.
 - Research-only: Fast-FoundationStereo (NVIDIA research license), EndoSSL (via SurgVISTA's
   conversion; no license stated).
-- TensorRT comes from NVIDIA's pip wheels.
+- TensorRT comes from NVIDIA's pip wheels. The serving benchmark runs the Holoscan SDK and Triton
+  Inference Server from NVIDIA's NGC containers (pulled on first use, under NVIDIA's container
+  terms).
 
 ## Repository layout
 

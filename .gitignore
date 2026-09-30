@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 *.onnx
 *.engine
+*.plan
 cpp/third_party/
 cpp/build/
 third_party/
