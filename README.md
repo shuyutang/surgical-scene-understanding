@@ -42,6 +42,7 @@ test was pre-registered, and failures are reported as failures.
 | Instrument depth from stereo | Kinematics (4.8 mm median) | Stereo on jaw pixels | RAFT 12.9 mm; Fast-FoundationStereo 4.0 mm median but a heavy tail (*development*) | Kinematics |
 | Tissue hidden by the instrument | Local plane, current frame | Temporal tissue memory with SAM 2 masks | 2.54 → 1.28 mm (*development*) | Memory |
 | Deployment | — | ONNX → TensorRT FP16, C++ runtime | p99 2.6 ms end to end without stereo; DINOv2 engine 4.4 ms (+0.08 px from FP16) | — |
+| Serving framework (same engine, C++) | In-process TensorRT: 1.89 ms p50 | Holoscan 4.6 / Triton 25.04 | Holoscan +0.07 ms; Triton +0.2 ms (CUDA shared memory) to +4.7 ms (input in the gRPC request); outputs identical (*development*) | In-process / Holoscan |
 
 ### Scene semantics (GraSP, robot-assisted prostatectomy, 5 test surgeries)
 
@@ -124,7 +125,7 @@ Third-party model code goes in `third_party/` (gitignored); the fetch commands a
 | `src/surgscene/` | The library: keypoints, stereo, fusion, tracking, tissue, scene semantics, deployment |
 | `scripts/` | Data preparation, training, evaluation ([index and commands](scripts/README.md)) |
 | `configs/`, `splits/` | Training configs; frozen, hashed evaluation configs and split manifests |
-| `cpp/` | C++ runtime: TensorRT engine, MAP solver, Kalman filter; parity tests; latency benchmark |
+| `cpp/` | C++ runtime: TensorRT engine, MAP solver, Kalman filter; parity tests; latency benchmark; `serving/`: Holoscan and Triton benchmark |
 | `docs/` | Validation plan, test reports, plans and summaries ([index](docs/README.md)) |
 
 ## License

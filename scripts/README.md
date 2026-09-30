@@ -29,6 +29,9 @@ test say so; they were run once on the test split, after the pre-registration wa
 Shared logic lives in the package (`surgscene.pipeline`, `surgscene.kp_eval`,
 `surgscene.rectification`, `surgscene.video`, `surgscene.phase`, `surgscene.learned_stereo`, `surgscene.backbones`, `surgscene.grasp_st`), not in the scripts.
 
+Serving benchmark (in-process TensorRT vs Holoscan vs Triton, C++): `cpp/serving/run_serving_bench.sh`,
+then `serving_report.py` ([docs/serving_benchmark.md](../docs/serving_benchmark.md)).
+
 ## Reproducing
 
 Test-set commands are marked *once*: each was run a single time, after its pre-registration
