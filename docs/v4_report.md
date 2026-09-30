@@ -1,7 +1,7 @@
 # v4: masks as a measurement, and a jaw-length constraint for long-jaw tools, 2026-09-29
 
 Plan: [plans/plan_v4.md](plans/plan_v4.md).
-Pre-registration: [validation_plan.md](validation_plan.md), "v4", committed in `0f6ce73` before
+Pre-registration: [validation_plan.md](validation_plan.md), "v4", committed in `215da3d` before
 the one test run (`uv run python scripts/eval_v4.py --split test2`, output `runs/v4_test2/`).
 **This is test2's fourth use**, and v4's direction was motivated partly by v3's test2 result on
 long-jaw tools. Everything here is supportive evidence at most.

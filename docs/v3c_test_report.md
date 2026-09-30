@@ -1,6 +1,6 @@
 # v3 Phase C on test2: kinematics-fused 3D tool state (pre-specified), 2026-09-28
 
-Pre-registration: `docs/validation_plan.md`, section "v3 Phase C", committed in `54aef7e` before
+Pre-registration: `docs/validation_plan.md`, section "v3 Phase C", committed in `9a7cdc3` before
 this run. It ran once: `uv run python scripts/eval_v3c.py --split test2`. Raw output is in
 `runs/v3c_test2/` (report.md, results.json). **This is test2's second use**; the pre-registration
 states the prior exposure.

@@ -1,6 +1,6 @@
 # v3 Phase A on test2: DINOv2 keypoint network (pre-specified), 2026-09-28
 
-Pre-registration: `docs/validation_plan.md`, "v3 Phase A", committed in `d4c31a1` before this run.
+Pre-registration: `docs/validation_plan.md`, "v3 Phase A", committed in `b1396db` before this run.
 The run was `uv run python scripts/eval_kp_vit.py --split test2`, once; output is in
 `runs/v3_kp_vit_test2/`. The seed-0 DINOv2 model is compared with the seed-0 v2 U-Net; test2
 left, every 5th frame, 12 trajectories.

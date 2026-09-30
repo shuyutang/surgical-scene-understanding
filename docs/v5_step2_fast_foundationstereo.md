@@ -32,7 +32,7 @@ more than halves RAFT's error, but kinematic fusion is still the better tip-dept
 
 ## 1. Tissue depth on SERV-CT (B6, pre-registered, 3rd use of SERV-CT)
 
-Pre-registration: `docs/validation_plan.md` (commit `d6fa43e`). 16 pairs, 2 porcine specimens, CT
+Pre-registration: `docs/validation_plan.md` (commit `e2046c6`). 16 pairs, 2 porcine specimens, CT
 reference, all valid pixels, paired bootstrap over pairs. Output: `runs/v5_servct_ffs_23-36-37_it8/`.
 
 | ID | Endpoint | Result [95% CI] | Criterion | Verdict |

@@ -172,7 +172,7 @@ number above.
 - Add an endpoint: 2D left-image tip error, hybrid vs v2 (non-inferiority), so the depth gain
   can't hide a lateral loss.
 
-## Step 3 on test2 (pre-registered, `54aef7e`) — 2026-09-28
+## Step 3 on test2 (pre-registered, `9a7cdc3`) — 2026-09-28
 
 See [v3c_test_report.md](v3c_test_report.md).
 - C1 **FAIL**: 5.27 [3.56, 7.43] mm.
@@ -199,7 +199,7 @@ The full account, with the test2 table, is Amendment 1 in `validation_plan.md`.
 
 - RAFT-Stereo (zero-shot), checkpoint chosen on SurgPose tune proxies (`middlebury`). Tune: plane
   scatter 5.4 → 1.5 mm; photometric error not separable.
-- **B1 on SERV-CT (fresh, pre-registered in `effef97`): PASS.** Depth MAE 17.1 → 1.6 mm on common
+- **B1 on SERV-CT (fresh, pre-registered in `0c011f7`): PASS.** Depth MAE 17.1 → 1.6 mm on common
   pixels, in both specimens. A post-hoc check shows SGM's typical error is only 1–2 px: the gap is
   its 3–11% gross-error tail plus 41% missing coverage. Report: `v3b_servct_report.md`.
 - Latency is the open problem: 74–410 ms per pair in PyTorch.
@@ -209,7 +209,7 @@ The full account, with the test2 table, is Amendment 1 in `validation_plan.md`.
 - DINOv2 ViT-S/14 plus a conv-stem decoder, with a learned log-variance head (Gaussian NLL on the
   detached decoding error). The first training run produced NaN from a masked-NaN gradient; it's
   fixed and has a regression test.
-- **Test2 (pre-registered in `d4c31a1`):**
+- **Test2 (pre-registered in `b1396db`):**
   - A1 FAIL (PCK@10 −0.049) and A2 FAIL (mean +0.2 px): no 2D accuracy gain under the background
     and label shift.
   - A7 PASS (occluded −5.1 px).
@@ -219,7 +219,7 @@ The full account, with the test2 table, is Amendment 1 in `validation_plan.md`.
 
 ## Step 7: DINOv2 downstream, ViT FP16, fast stereo — 2026-09-28
 
-Pre-registered in `f22f390`. Report: `v3_step5_e1_b5_report.md`.
+Pre-registered in `c52302c`. Report: `v3_step5_e1_b5_report.md`.
 - **V1 FAIL, V2 FAIL:** 3D is unchanged on average (5.03 vs 5.27 mm). The long-jaw tool improves
   by about 3 mm and some standard trajectories get worse.
 - **V3 PASS:** occlusion −4.3 px through the Kalman filter.

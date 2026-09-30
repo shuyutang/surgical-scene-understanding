@@ -1,6 +1,6 @@
 # Phases 3b–6: results and lessons (2026-09-25)
 
-Pre-specified in [validation_plan.md](validation_plan.md) (stage 2, commit `d7bfdb5`) before any
+Pre-specified in [validation_plan.md](validation_plan.md) (stage 2, commit `9df6166`) before any
 test2 or deployment number was computed. Reports: [stage-2 test](stage2_test_report.md),
 [stage-2 tune](stage2_tune_report.md) (in-sample, for reference), [deployment](phase6_deploy_report.md).
 
