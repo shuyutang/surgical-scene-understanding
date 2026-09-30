@@ -22,6 +22,10 @@ test was pre-registered, and failures are reported as failures.
 - **For "what is happening", temporal context and DINOv2 features win.** Step recognition reaches
   **0.47 macro-F1**. A fine-tuned 8B vision-language model gets 0.21, and a surgical
   self-supervised backbone (EndoSSL) 0.24.
+- **Deployment fits the 30 fps budget with a wide margin.** The C++ runtime (TensorRT FP16 +
+  Eigen) takes **2.6 ms p99** per stereo pair. Serving the same engine through Holoscan adds
+  **0.07 ms**; through Triton, **0.2 ms** with CUDA shared memory and **4.7 ms** with the input in
+  the gRPC request.
 - **Not met:** the 5 mm 3D target overall. Long-jaw instruments remain the hard case, and the 3D
   test set is used up (fresh data is needed for further claims).
 
@@ -41,8 +45,45 @@ test was pre-registered, and failures are reported as failures.
 | Long-jaw instruments | Rigid tool model | + jaw-length constraint | 5.27 → 4.82 mm; primary endpoint failed (one misclassified arm) | Neither shown |
 | Instrument depth from stereo | Kinematics (4.8 mm median) | Stereo on jaw pixels | RAFT 12.9 mm; Fast-FoundationStereo 4.0 mm median but a heavy tail (*development*) | Kinematics |
 | Tissue hidden by the instrument | Local plane, current frame | Temporal tissue memory with SAM 2 masks | 2.54 → 1.28 mm (*development*) | Memory |
-| Deployment | — | ONNX → TensorRT FP16, C++ runtime | p99 2.6 ms end to end without stereo; DINOv2 engine 4.4 ms (+0.08 px from FP16) | — |
-| Serving framework (same engine, C++) | In-process TensorRT: 1.89 ms p50 | Holoscan 4.6 / Triton 25.04 | Holoscan +0.07 ms; Triton +0.2 ms (CUDA shared memory) to +4.7 ms (input in the gRPC request); outputs identical (*development*) | In-process / Holoscan |
+
+### Deployment (C++, RTX 4090)
+
+The keypoint network is exported with its preprocessing and decoding inside the graph (ONNX →
+TensorRT), so the GPU does all per-pixel work and the C++ side receives 10 keypoints with
+confidence and σ per image. The shape prior, tracking and triangulation run in C++ with Eigen.
+
+| Test | Result |
+|---|---|
+| TensorRT vs PyTorch | FP32 outputs: p99 difference 0.003 px. FP16: mean keypoint error +0.008 [−0.013, +0.036] px vs PyTorch FP32 |
+| C++ vs Python (MAP, Kalman, triangulation, engine) | Agree to ≤ 2e-6 px, engine outputs identical; 10 GoogleTest parity tests |
+| End to end per stereo pair (copy in, TensorRT, copy out, MAP, Kalman, triangulation) | p50 2.50 ms, **p99 2.59 ms** (budget 33 ms); stereo and video decode not included |
+| DINOv2 keypoint engine, FP16 | 4.4 ms per stereo pair; mean keypoint error +0.08 px vs PyTorch FP32 |
+
+**Serving the same engine: in-process vs Holoscan vs Triton** (*development*, not pre-registered).
+The same TensorRT 10.9 FP16 engine file, called from C++, one stereo pair in flight (closed loop,
+batch 1), pair in host memory → outputs in host memory, 3 × 2,000 pairs per setup. All outputs are
+identical to the reference. This covers the engine call only (no MAP/Kalman) and runs in NVIDIA's
+containers with TensorRT 10.9, so it isn't directly comparable with the end-to-end row above
+(TensorRT 10.16).
+
+| Setup | p50 (ms) | p99 (ms) | Extra over in-process (p50) |
+|---|---|---|---|
+| In-process TensorRT, one direct copy (reference) | **1.89** | **1.96** | — |
+| Holoscan 4.6, `InferenceOp` | 1.96 | 2.21 | **+0.07** |
+| Triton 25.04, input in CUDA shared memory | 2.09 | 2.81 | +0.20 |
+| Triton, input in system shared memory | 2.86 | 3.81 | +0.97 |
+| Triton, input in the gRPC request (default) | 6.56 | 10.38 | +4.67 |
+| This repo's runtime (copy via a pinned staging buffer) | 2.37 | 2.50 | +0.48 |
+
+- **Holoscan's scheduling costs almost nothing.** It suits a real-time loop, and its GPUDirect
+  capture (not tested here) would also remove the host-to-GPU copy.
+- **Triton's cost is moving the 8.3 MB stereo pair into another process.** It is small only with
+  CUDA shared memory, which works on a single machine. Its strengths (batching, many clients and
+  models, fault isolation) aren't exercised by a single closed loop.
+- **The largest single cost is this repo's own extra copy** (+0.48 ms), not either framework.
+
+Details: [docs/phase6_deploy_report.md](docs/phase6_deploy_report.md) and
+[docs/serving_benchmark.md](docs/serving_benchmark.md).
 
 ### Scene semantics (GraSP, robot-assisted prostatectomy, 5 test surgeries)
 
@@ -78,6 +119,9 @@ Requirements → tests → results: [docs/traceability.md](docs/traceability.md)
 
 Semantics: frames ─► frozen backbone (ResNet-50 / DINOv2 / EndoSSL) ─► causal MS-TCN ─► phase + step
            instance box ─► crop + frame features ─► MLP ─► instrument type + actions   (vs Qwen3-VL-8B, QLoRA)
+
+Deploy:    PyTorch (preprocess + network + decode) ─► ONNX ─► TensorRT FP16 ─► C++ runtime (Eigen MAP, Kalman, triangulation)
+           same engine served in-process, in a Holoscan app, or by Triton (gRPC client) for comparison
 ```
 
 ## Quick start
