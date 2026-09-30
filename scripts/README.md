@@ -15,13 +15,15 @@ test say so; they were run once on the test split, after the pre-registration wa
 | Phase 6 | `export_trt.py`, `eval_deploy.py`, `prepare_cpp_bench.py` | TensorRT export, parity and FP16 checks, C++ benchmark inputs |
 | **v3** A0 | `eval_a0.py` | Focal-loss positives fix (tune) |
 | Phase C | `fit_tool_geometry.py`, `eval_fusion.py`, `eval_v3c.py` | Train tool geometry; kinematics fusion on tune; pre-registered C1–C6 |
-| Phase B | `eval_stereo_tune.py`, `eval_servct.py` | RAFT-Stereo checkpoint selection on tune; pre-registered B1/B5 on SERV-CT |
+| Phase B | `eval_stereo_tune.py`, `eval_servct.py` | Stereo checkpoint selection on tune; pre-registered B1/B5 (RAFT-Stereo) and B6 (Fast-FoundationStereo) on SERV-CT |
 | Phase A | `train_kp_vit.py`, `eval_kp_vit.py`, `eval_downstream_vit.py` | DINOv2 keypoints; pre-registered A and V endpoints |
 | Phase E | `export_trt_vit.py`, `eval_deploy_vit.py`, `eval_e1_vit.py` | DINOv2 TensorRT export, development checks, pre-registered E1 |
 | **v4** | `v4_sam2_feasibility.py`, `v4_make_masks.py`, `v4_mask_qa.py` | SAM 2 feasibility, masks for all videos, mask QA |
 | | `v4_tool_library.py`, `v4_dev_fusion.py`, `eval_v4.py` | Instrument-type library (train), development variants (tune), pre-registered M1–M5 |
 | Scene semantics | `grasp_prepare.py` | Frozen GraSP split and label arrays (official labels) |
-| **v5** | `v5_dev_stereo_tip.py`, `v5_tissue_memory.py` | Development only: stereo on instrument jaws; tissue memory |
+| | `grasp_features.py`, `grasp_tcn.py` | Frozen ResNet-50 / DINOv2 frame features; causal MS-TCN and linear probes (development grid, final training) |
+| | `grasp_vlm.py`, `eval_grasp.py` | Qwen3-VL-8B zero-shot and QLoRA; development comparison and pre-registered S1–S4 |
+| **v5** | `v5_dev_stereo_tip.py`, `v5_tissue_memory.py` | Development only: stereo (RAFT or Fast-FoundationStereo) on instrument jaws; tissue memory |
 
 Shared logic lives in the package (`surgscene.pipeline`, `surgscene.kp_eval`,
-`surgscene.rectification`, `surgscene.video`), not in the scripts.
+`surgscene.rectification`, `surgscene.video`, `surgscene.phase`, `surgscene.learned_stereo`), not in the scripts.

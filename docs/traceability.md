@@ -77,9 +77,22 @@ used by v2 stage 2 and again by v3 (disclosed in each pre-registration). SERV-CT
 |---|---|---|---|
 | B1: learned stereo − SGM, depth MAE | SERV-CT (fresh) | −15.5 [−23.5, −9.1] mm (17.1 → 1.6) | PASS |
 | B5: fast stereo (`realtime` @ 4, 10.7 ms) − SGM | SERV-CT (2nd) | −15.2 [−23.0, −8.8] mm (→ 1.9) | PASS |
+| B6: Fast-FoundationStereo − RAFT `middlebury`@32 | SERV-CT (3rd) | −0.49 [−0.95, −0.09] mm (1.86 → 1.37) | PASS |
 | B3: rectification row offset | train + tune | 18/22 trajectories off 1–2 px; shift rule | rule fixed |
 | S5: alert toggles, Kalman + hysteresis / frame-wise | test2 (1st) | 0.54 | PASS |
 | Distance error vs same-plane reference (reported) | test2 (1st) | 8.2 mm (Kalman) | report |
+
+## Scene semantics: phase and step recognition (GraSP, separate track)
+
+Not one of R1–R7: it answers "what is happening" rather than "where is the instrument".
+Report: [grasp_test_report.md](grasp_test_report.md).
+
+| Test | Data | Result | Verdict |
+|---|---|---|---|
+| GraSP S1: step macro-F1, DINOv2 − ResNet-50 (both causal MS-TCN) | GraSP test (1st), 5 cases | +0.067 [+0.039, +0.096] | PASS |
+| GraSP S2: step macro-F1, MS-TCN − per-frame (ResNet-50) | GraSP test | +0.137 [+0.079, +0.224] | PASS |
+| GraSP S3: step macro-F1, fine-tuned Qwen3-VL-8B − DINOv2 MS-TCN | GraSP test | −0.259 [−0.363, −0.159] | report |
+| GraSP S4: phase macro-F1, DINOv2 − ResNet-50 | GraSP test | +0.046 [−0.036, +0.120] | FAIL |
 
 ## R2: segmentation (Phase 1, SISVSE internal, EndoVis18 external)
 

@@ -1,5 +1,8 @@
 # Plan: surgical scene semantics on GraSP (phase and step recognition), 2026-09-29
 
+**Status (2026-09-29): done.** Endpoints frozen in `docs/validation_plan.md` and run once on
+test: S1 and S2 pass, S4 fails, S3 reported. Results: [grasp_test_report.md](../grasp_test_report.md).
+
 A separate track from the 3D pipeline: GraSP is monocular, with no stereo, depth or kinematics,
 and SurgPose has no workflow labels, so the two can't be evaluated jointly. The question is the
 same as in the rest of the project, asked for the "scene semantics" component: **what does each

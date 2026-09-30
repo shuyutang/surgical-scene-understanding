@@ -1,9 +1,9 @@
-# Conventional vs modern: what each choice bought, 2026-09-28 (v4 rows added 2026-09-29)
+# Conventional vs modern: what each choice bought, 2026-09-28 (v4, v5 and scene-semantics rows added 2026-09-29)
 
 This is a consolidation of results already reported elsewhere; no new evaluation was run for it.
 Every number links back to a pre-specified endpoint in [validation_plan.md](validation_plan.md)
 unless it's marked **post hoc**. CIs are 95% clustered bootstrap (trajectory for SurgPose, stereo
-pair for SERV-CT). Requirements R1–R7 are defined in [traceability.md](traceability.md).
+pair for SERV-CT, case for GraSP). Requirements R1–R7 are defined in [traceability.md](traceability.md).
 
 "Conventional vs modern" doesn't split this project into two pipelines. Even the v2 baseline
 detects keypoints with a network (ResNet-34 U-Net, ImageNet weights). The classical parts are
@@ -17,6 +17,7 @@ else held fixed.
 |---|---|---|---|---|---|
 | Tissue depth | SGM (OpenCV, CPU) | RAFT-Stereo, `middlebury` @ 32 | Depth MAE 17.06 → **1.58 mm**; difference −15.48 [−23.46, −9.06] | B1, SERV-CT (fresh) | **Modern** |
 | Tissue depth, real-time | SGM | RAFT-Stereo, `realtime` @ 4 | → 1.88 mm; difference −15.18 [−23.02, −8.75] | B5, SERV-CT | **Modern** |
+| Tissue depth, newer model (v5 step 2) | RAFT-Stereo, `middlebury` @ 32 (2021) | Fast-FoundationStereo `23-36-37` @ 8 (monocular foundation prior, distilled) | 1.86 → **1.37 mm**; difference −0.49 [−0.95, −0.09]; 104 → 47 ms | B6, SERV-CT (3rd) | **Newer modern** |
 | 2D keypoints, clean | ResNet-34 U-Net | DINOv2 ViT-S/14 + U-Net decoder | PCK@10 −0.049 [−0.069, −0.028]; mean error +0.20 [−0.65, 1.07] px | A1, A2, test2 | **Neither** (v2 slightly better on PCK) |
 | 2D keypoints, occluded | ResNet-34 U-Net | DINOv2 | −5.09 [−6.77, −3.41] px | A7, test2 | **Modern** |
 | Keypoint uncertainty | σ from the heatmap peak shape (Laplace) | Learned log-variance head | Spearman(σ, error) −0.25 → **+0.53**; coverage 0.952 [0.927, 0.975] | A5, A8, test2 | **Modern** |
@@ -28,7 +29,12 @@ else held fixed.
 | Instrument masks as a 3D measurement (v4) | Keypoints + kinematics only | SAM 2.1 masks (type ratio, shaft-width depth, visibility gate) | All three no better than without masks on train/tune; a kinematic jaw-length feature beat the mask ratio | v4 development | **Classical** |
 | Tissue under the instrument (v5 step 1) | Local plane in an annulus, current frame (Phase 5) | Temporal tissue memory with SAM 2 masks (not NeRF/3DGS) | Hidden-tissue proxy 2.54 → 1.28 mm; distance error still dominated by the tip (5.35 mm) | tune, development | **Memory** (simple, temporal) |
 | Instrument tip depth (v5 step 0) | Kinematic fusion | RAFT-Stereo on jaw pixels (zero-shot) | Even read at GT pixels: tips 12–17 mm median vs kinematics 4.8 mm; jaw disparity bleeds to the tissue behind | tune, development | **Classical** |
+| Instrument tip depth (v5 step 2) | Kinematic fusion | Fast-FoundationStereo on jaw pixels (zero-shot) | At GT pixels: tips 4.0 mm median (10.3 mean) vs kinematics 4.8 (6.3); jaw estimator 12.1 mm vs v4 hybrid 5.5 mm | tune, development | **Classical**, gap narrowed: a candidate fusion measurement |
 | Long-jaw tip depth (v4) | v3 rigid tool model | Jaw-length constraint (geometric, classical) | Arms classified long −2.15 [−5.34, 1.03] mm (1 misclassified); mean 5.27 → 4.82 mm | M1, M2, test2 (4th) | **Neither** (primary fails) |
+| Scene semantics: steps, backbone (GraSP) | ResNet-50 (ImageNet), frozen, + causal MS-TCN | DINOv2 ViT-B/14, frozen, same MS-TCN | Step macro-F1 0.401 → **0.469**; +0.067 [+0.039, +0.096], 5/5 cases | S1, GraSP test (1st) | **Modern** |
+| Scene semantics: steps, temporal model | Per-frame linear probe | Causal MS-TCN (learned temporal model) | +0.137 [+0.079, +0.224] (ResNet-50); +0.136 on DINOv2 | S2, GraSP test | **Temporal model** |
+| Scene semantics: phases, backbone | ResNet-50 + MS-TCN | DINOv2 + MS-TCN | Phase macro-F1 +0.046 [−0.036, +0.120], 4/5 cases | S4, GraSP test | **Neither shown** |
+| Scene semantics: VLM | DINOv2 + MS-TCN (0.466 on VLM frames) | Qwen3-VL-8B per frame, QLoRA-fine-tuned (zero-shot: 0.025) | 0.206; −0.259 [−0.363, −0.159], 0/5 cases | S3, GraSP test | **Frozen features + temporal model** |
 
 ## Cost side
 
@@ -37,6 +43,7 @@ else held fixed.
 | Keypoint network, TensorRT FP16, per stereo pair | U-Net 1.5 ms | DINOv2 4.4 ms (17.6 ms FP32) |
 | FP16 accuracy cost vs GT | +0.008 px (D2) | +0.076 [+0.057, +0.095] px (E1) |
 | Stereo, half resolution | SGM 19 ms (CPU) | RAFT-Stereo 10.7 ms @ 4 iterations, 98 ms @ 32 (PyTorch, not yet TensorRT) |
+| Stereo, 720×576 (SERV-CT) | — | Fast-FoundationStereo 47 ms @ 8 vs RAFT-Stereo `middlebury` 104 ms @ 32 (PyTorch fp16; readme reports 14–23 ms with TensorRT on a 3090 at 640×480) |
 | Kalman + fusion + triangulation | < 1 ms (C++, D3/D4) | — |
 | End-to-end p99 (C++) | 2.59 ms without stereo (D4) | **not measured**: about 16 ms summed from separately timed stages |
 | Deployment traps found | Argmax flips on near-tied peaks in FP16 (0.4% of keypoints > 2 px) | Argmax-index overflow in FP16 (all NaN, fixed by pinning the decode to FP32); an unexplained 0.88 px TensorRT-only shift |
@@ -69,7 +76,8 @@ else held fixed.
 - **A classical segmentation baseline** for Phase 1.
 - **A learned temporal model or a learned fusion model** in place of the Kalman filter or EKF; see
   the next section.
-- Test2 has been used three times, so any new comparison needs fresh data to be confirmatory.
+- Test2 has been used four times and SERV-CT three times, so any new comparison needs fresh data
+  to be confirmatory.
 
 ## Learned alternatives to the classical estimators (literature; not tested here)
 

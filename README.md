@@ -22,6 +22,8 @@ p99 latency < 33 ms (R3), calibrated uncertainty (R7). Full requirement → test
 | v3 B | RAFT-Stereo vs SGM, tissue depth (SERV-CT, CT ground truth) | 17.1 → 1.6 mm (1.9 mm at 10.7 ms) |
 | v4 | Jaw-length constraint for long-jaw instruments (SAM 2 masks tried, dropped) | 4.82 [3.63, 6.21] mm; primary endpoint failed (one misclassified arm) |
 | v5 | Occlusion-aware tissue memory (development) | Hidden-tissue depth 2.54 → 1.28 mm vs a local plane; tip error still dominates distance |
+| v5 B6 | Fast-FoundationStereo vs RAFT-Stereo, tissue depth (SERV-CT) | 1.86 → 1.37 mm, −0.49 [−0.95, −0.09]; 2× faster; on instrument jaws median 4.0 mm at GT pixels (RAFT 12.9) |
+| Scene semantics | Phase / step recognition on GraSP (5 test cases) | Step macro-F1: DINOv2 + causal MS-TCN **0.469**, ResNet-50 + MS-TCN 0.401, per-frame 0.26–0.33, fine-tuned Qwen3-VL-8B 0.21 |
 | Deploy | ONNX → TensorRT FP16, C++ runtime | U-Net path p99 2.6 ms end to end (without stereo); DINOv2 engine 4.4 ms, +0.08 px from FP16 |
 
 Summary of what worked, component by component: [docs/conventional_vs_modern.md](docs/conventional_vs_modern.md).
@@ -43,15 +45,18 @@ fusing the robot's kinematics. **R1 is not met overall**; the evaluation set has
 
 ```bash
 uv sync -p 3.12                       # Python 3.12, PyTorch 2.8 (CUDA 12.8 wheels)
-uv run --group dev pytest             # 44 unit tests; no data needed
+uv run --group dev pytest             # 47 unit tests; no data needed
 ```
 
-Optional dependency groups: `stereo` (RAFT-Stereo), `sam` (SAM 2 via transformers), `deploy`
-(TensorRT, ONNX). RAFT-Stereo code and weights are fetched into `third_party/` (gitignored):
+Optional dependency groups: `stereo` (RAFT-Stereo, Fast-FoundationStereo), `sam` (SAM 2 via
+transformers), `vlm` (Qwen3-VL, QLoRA), `deploy` (TensorRT, ONNX). Stereo code and weights are
+fetched into `third_party/` (gitignored):
 
 ```bash
 git clone https://github.com/princeton-vl/RAFT-Stereo third_party/RAFT-Stereo
 (cd third_party/RAFT-Stereo && bash download_models.sh)
+git clone https://github.com/NVlabs/Fast-FoundationStereo third_party/Fast-FoundationStereo
+# research checkpoints: Google Drive folder linked in its readme, into third_party/Fast-FoundationStereo/weights/
 ```
 
 ### Data
@@ -68,7 +73,9 @@ terms before use.
 | GraSP (1 fps) | Phase and step recognition (scene-semantics track) | github.com/BCV-Uniandes/GraSP (Google Drive) | no data license stated; research use |
 
 Pretrained models: DINOv2 (Apache 2.0, via `timm`), SAM 2.1 (Apache 2.0, via `transformers`),
-RAFT-Stereo (MIT). TensorRT is installed from NVIDIA's pip wheels under NVIDIA's license.
+RAFT-Stereo (MIT), Qwen3-VL-8B-Instruct (Apache 2.0), torchvision ResNet-50 (BSD).
+Fast-FoundationStereo's code and research checkpoints are under NVIDIA's **research-only
+(non-commercial)** license. TensorRT is installed from NVIDIA's pip wheels under NVIDIA's license.
 
 Frozen split manifests (with hashes) are committed in `splits/`.
 
@@ -103,6 +110,19 @@ uv run python scripts/eval_v4.py --split tune                # --split test2: on
 
 # v5 (development, tune only): stereo on instruments, tissue memory
 uv run --group stereo --group sam python scripts/v5_tissue_memory.py
+# v5 step 2: Fast-FoundationStereo (selection on tune, jaw check on tune, B6 on SERV-CT once)
+uv run --group stereo python scripts/eval_stereo_tune.py --out runs/v5_ffs_tune --select-prefix ffs: \
+    --methods middlebury realtime@4 ffs:23-36-37@8 ffs:23-36-37@4 ffs:20-26-39@8 ffs:20-30-48@4
+uv run --group stereo --group sam python scripts/v5_dev_stereo_tip.py --models middlebury@32 ffs:23-36-37@8 --out runs/v5_ffs_tip
+uv run --group stereo python scripts/eval_servct.py --method ffs:23-36-37@8 --reference middlebury@32
+
+# scene semantics (GraSP): features, temporal models, VLM, endpoints
+uv run python scripts/grasp_prepare.py
+uv run python scripts/grasp_features.py --backbone resnet50 && uv run python scripts/grasp_features.py --backbone dinov2_b14
+uv run python scripts/grasp_tcn.py dev && uv run python scripts/grasp_tcn.py final
+uv run --group vlm python scripts/grasp_vlm.py train --tag final_ft --cases <8 train cases> --stride 10
+uv run --group vlm python scripts/grasp_vlm.py predict --tag test_ft --adapter runs/grasp_vlm/final_ft/adapter --cases <test cases> --stride 5
+uv run python scripts/eval_grasp.py test                     # once
 
 # deployment: TensorRT FP16 engines, C++ runtime and latency benchmark
 uv sync --group deploy && cpp/scripts/fetch_deps.sh
