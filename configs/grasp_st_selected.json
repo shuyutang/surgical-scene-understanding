@@ -1,0 +1,7 @@
+{
+ "note": "GraSP short-term test configuration, frozen 2026-09-29 before any short-term test output (docs/validation_plan.md). Heads: runs/grasp_st_dev/selected.json, trained on all train instances by scripts/grasp_shortterm.py final. reference_arm = best single-frame head on development (action macro-F1).",
+ "reference_arm": "dinov2_b14_single",
+ "vlm_zero_shot_tag": "st_test_zs",
+ "vlm_finetuned_tag": "st_test_ft",
+ "vlm_finetuned_adapter": "runs/grasp_vlm/st_final_ft/adapter"
+}

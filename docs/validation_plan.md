@@ -673,3 +673,104 @@ Script: `uv run --group stereo python scripts/eval_servct.py --method ffs:23-36-
 
 The instrument-jaw check of v5 step 0 (tune, development only) is repeated with FFS:
 `scripts/v5_dev_stereo_tip.py --models middlebury@32 ffs:23-36-37@8 --out runs/v5_ffs_tip`.
+
+---
+
+# Validation Plan: scene semantics round 2 on GraSP (S5 EndoSSL; ST1–ST4 short-term), pre-specified 2026-09-29
+
+Committed before any EndoSSL prediction on a test case and before any short-term test output.
+
+## Prior exposure, stated plainly
+
+- **GraSP test cases, 2nd use.** The long-term labels (phases, steps) of the 5 test cases were used
+  once, for S1–S4 (commit `31f51d7`). Nothing here was tuned on that result.
+- **The short-term test labels (instances, instruments, actions) have not been used.** The test
+  frames were seen before, only as inputs.
+- **Surgical video foundation models:** SurgVISTA's backbone isn't released (its Hugging Face repo
+  is empty), and SurgMotion's weights are gated (access requested, not granted). Neither is tested.
+  EndoSSL, SurgVISTA's image teacher, is released and tested here.
+
+## S5: in-domain self-supervised backbone (EndoSSL ViT-L/16) for steps
+
+- **Backbone:** EndoSSL ViT-L/16 (MSN on private laparoscopy video; Hirsch et al., MICCAI 2023),
+  via the PyTorch conversion released with SurgVISTA.
+  - Its weights equal the official JAX checkpoint.
+  - With raw 0–255 input it reproduces the official TF SavedModel: cosine 0.9998 on one frame, 0.98
+    with the pipeline's own resize and bf16.
+  - Features: [CLS, mean patch] after the final norm, 2048-d, frozen.
+- **Arm E:** EndoSSL features + the same causal MS-TCN, selected on the official folds by the rule
+  used for A and B (`runs/grasp_dev/report.md`): sqrt_inv class weights, 150 epochs.
+  Development step F1 **0.271** (B: 0.403, A: 0.349), phase F1 0.448. Final model: 3 seeds on the
+  8 train cases.
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| S5 | Step macro-F1, E − B (EndoSSL vs DINOv2, both causal MS-TCN), all frames, 5 test cases | LB > 0 |
+| Reported | Phase macro-F1 E − B; E − E0 (temporal model on EndoSSL) | report |
+
+Expectation from development: S5 fails; EndoSSL is below both general-domain backbones on this
+robotic prostatectomy data.
+
+## ST1–ST4: short-term scene understanding (instrument type and atomic actions per instance)
+
+**Task.** For each annotated instrument instance on the GraSP keyframes (every 35 s; train: 2,324
+keyframes, 6,170 instances; test: 1,125 keyframes, 2,861 instances), with its **ground-truth box
+given**, predict:
+- its instrument type (7 classes);
+- its atomic actions (14 classes, multi-label).
+
+This is recognition only, not GraSP's official detection task. Code: `surgscene.grasp_st`.
+
+**Arms:**
+- **Frozen-feature heads** (`scripts/grasp_shortterm.py`):
+  - Input: the backbone's feature of the padded box crop, the whole-frame feature, and the box
+    geometry → MLP with an instrument head and an action head.
+  - Variant "prev": adds the same crop one second earlier, a motion cue a single image lacks.
+  - Backbones: ResNet-50, DINOv2 ViT-B/14, EndoSSL ViT-L/16.
+  - Selection on the official folds (both directions, 3 seeds): epochs and the action threshold
+    with the highest held-out action macro-F1. A first grid chose its edge values everywhere
+    (lowest threshold, 10–30 of 150 epochs), so it was widened to thresholds 0.05–0.5 and epochs
+    2–60. Both reports are kept (`runs/grasp_st_dev/report_grid1.md`, `report.md`).
+- **VLM, SurgMLLM-style:** Qwen3-VL-8B-Instruct with the instance's box drawn in red on the frame.
+  - The answer is "<instrument>; <action>, <action>" (`scripts/grasp_vlm.py --task instances`).
+  - Zero-shot: the prompt lists the names. Fine-tuned: QLoRA as in S3, 1 epoch over all 6,170
+    train instances (385 steps) → `runs/grasp_vlm/st_final_ft/adapter` (`adapter_model.safetensors`
+    sha256 prefix `ca2723487eb17269`).
+  - SurgMLLM itself (InternVL2.5-4B, trained on cholecystectomy) was not tested: no released
+    weights were found.
+
+**Development comparison** (train fold1 → evaluate fold2, 4 cases; `runs/grasp_st_dev_compare/report.md`):
+
+| Arm | Instrument F1 | Action F1 | Action mAP |
+|---|---|---|---|
+| ResNet-50, single / prev | 0.703 / 0.740 | 0.248 / 0.268 | 0.258 / 0.275 |
+| **DINOv2, single** / prev | **0.780** / 0.799 | **0.269** / 0.285 | 0.298 / 0.317 |
+| EndoSSL, single / prev | 0.649 / 0.632 | 0.241 / 0.250 | 0.248 / 0.261 |
+| Qwen3-VL-8B, zero-shot | 0.180 | 0.084 | — |
+| Qwen3-VL-8B, QLoRA fine-tuned on fold1 | 0.670 | 0.171 | — |
+
+**Frozen configuration** (`configs/grasp_st_selected.json`):
+- reference arm = the best single-frame head on development, **DINOv2 single**;
+- heads: `runs/grasp_st_dev/selected.json`, trained on all train instances, 3 seeds, mean
+  probabilities;
+- VLM: zero-shot tag `st_test_zs`, fine-tuned tag `st_test_ft`.
+
+**Endpoints** (5 test cases; unit = case; paired case-level bootstrap, 2,000 replicates):
+
+| ID | Endpoint | Criterion |
+|---|---|---|
+| ST1 (primary) | Action macro-F1, fine-tuned VLM − DINOv2 single | LB > 0 |
+| ST2 | Instrument macro-F1, fine-tuned VLM − DINOv2 single | LB > 0 |
+| ST3 | Action macro-F1, DINOv2 single − ResNet-50 single | LB > 0 |
+| ST4 | Action macro-F1, DINOv2 prev − DINOv2 single (motion cue) | LB > 0 |
+| Reported | Every arm's instrument F1, action F1 and action mAP; zero-shot VLM; EndoSSL heads; per-case values | report |
+
+**Expectations from development:**
+- ST1 and ST2 fail: the fine-tuned VLM is below the DINOv2 head on both tasks.
+- ST3 and ST4 are positive but small (+0.02 each), likely inside the CI with 5 cases.
+
+## Run order
+
+1. `grasp_vlm.py predict --task instances --tag st_test_zs --split test --batch 16`
+2. `grasp_vlm.py predict --task instances --tag st_test_ft --adapter runs/grasp_vlm/st_final_ft/adapter --split test --batch 16`
+3. `eval_grasp_shortterm.py test` and `eval_grasp.py test-s5`, once each. Results are committed as they come out.

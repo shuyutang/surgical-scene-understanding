@@ -2,11 +2,13 @@
 
   uv run python scripts/eval_grasp.py dev     # fold1 -> fold2: temporal arms vs VLM, VLM smoothing window
   uv run python scripts/eval_grasp.py test    # once, after the pre-registration is committed
+  uv run python scripts/eval_grasp.py test-s5 # once: S5, EndoSSL (arm E) vs DINOv2 (B); 2nd use of the test cases
 
 Arms (selected configs in runs/grasp_dev/selected.json; VLM tags in configs/grasp_selected.json):
   A  resnet50 + causal MS-TCN        A0  resnet50 + per-frame linear probe
   B  dinov2_b14 + causal MS-TCN      B0  dinov2_b14 + per-frame linear probe
   C  Qwen3-VL-8B, zero-shot and QLoRA fine-tuned, raw and with causal majority smoothing
+  E  endossl_l16 + causal MS-TCN     E0  endossl_l16 + per-frame linear probe   (added for S5)
 Temporal arms: mean probabilities of 3 seeds. Metric per case: macro-F1 over classes present in GT
 or prediction, and accuracy; unit of analysis = case; paired differences, case-clustered bootstrap
 (2,000 replicates) plus the per-case values. A/B/A0/B0 are scored on every frame; comparisons that
@@ -137,6 +139,33 @@ def dev():
     print("\n".join(L))
 
 
+def test_s5():
+    """S5: step macro-F1, E - B (in-domain surgical SSL vs DINOv2, both causal MS-TCN), all frames."""
+    sel = json.loads((ROOT / "runs/grasp_dev/selected.json").read_text())
+    cases = list(SPLIT["splits"]["test"]["cases"])
+    arms = {"B": "dinov2_b14_tcn", "B0": "dinov2_b14_linear", "E": "endossl_l16_tcn", "E0": "endossl_l16_linear"}
+    pred = {arm: temporal_predictions(name, None, cases, sel, ROOT / f"runs/grasp_final/{name}") for arm, name in arms.items()}
+    S = {arm: {c: scores(*labels(c), *pred[arm][c]) for c in cases} for arm in arms}
+    col = lambda arm, k: [S[arm][c][k] for c in cases]
+    E = {"S5": ("Step macro-F1, E − B (EndoSSL vs DINOv2, both MS-TCN)", boot_diff(col("E", "step_f1"), col("B", "step_f1"))),
+         "S5 phase (reported)": ("Phase macro-F1, E − B", boot_diff(col("E", "phase_f1"), col("B", "phase_f1"))),
+         "E − E0 (reported)": ("Step macro-F1, E − E0 (temporal model on EndoSSL)",
+                               boot_diff(col("E", "step_f1"), col("E0", "step_f1")))}
+    out = ROOT / "runs/grasp_test_s5"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "results.json").write_text(json.dumps({"endpoints": {k: v[1] for k, v in E.items()},
+                                                  "verdict_S5": E["S5"][1]["lo"] > 0, "per_case": S}, indent=1))
+    f = lambda d: f"{d['point']:+.3f} [{d['lo']:+.3f}, {d['hi']:+.3f}] ({d['n_positive']}/{d['n']} cases > 0)"
+    L = ["# GraSP test, S5 (2nd use of the test cases), pre-specified", "",
+         "| ID | Endpoint | Result [95% CI] | Criterion | Verdict |", "|---|---|---|---|---|"]
+    for k, (name, d) in E.items():
+        crit, v = ("LB > 0", "PASS" if d["lo"] > 0 else "FAIL") if k == "S5" else ("report", "report")
+        L.append(f"| {k} | {name} | {f(d)} | {crit} | {v} |")
+    L += ["", "Mean over the 5 test cases:", ""] + table({arm: ("all", mean_scores(S[arm])) for arm in arms})
+    (out / "report.md").write_text("\n".join(L) + "\n")
+    print("\n".join(L))
+
+
 def test():
     sel = json.loads((ROOT / "runs/grasp_dev/selected.json").read_text())
     cfg = json.loads((ROOT / "configs/grasp_selected.json").read_text())
@@ -179,5 +208,5 @@ def test():
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("mode", choices=["dev", "test"])
-    {"dev": dev, "test": test}[ap.parse_args().mode]()
+    ap.add_argument("mode", choices=["dev", "test", "test-s5"])
+    {"dev": dev, "test": test, "test-s5": test_s5}[ap.parse_args().mode]()

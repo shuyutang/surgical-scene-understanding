@@ -2,6 +2,7 @@
 
   uv run python scripts/grasp_tcn.py dev      # official folds: train fold1 -> eval fold2 and back
   uv run python scripts/grasp_tcn.py final    # train the selected configs on all 8 train cases
+  uv run python scripts/grasp_tcn.py dev --backbones endossl_l16   # add a backbone; other rows are kept
 
 dev: grid over backbone {resnet50, dinov2_b14} x model {tcn, linear} x class weighting
 {none, sqrt_inv} x seeds {0, 1, 2}, both fold directions; the held-out metric is recorded every
@@ -26,7 +27,7 @@ from surgscene.phase import N_PHASE, N_STEP, TrainCfg, macro_f1, predict_proba, 
 
 ROOT = Path(__file__).resolve().parents[1]
 SPLIT = json.loads((ROOT / "splits/grasp_split.json").read_text())
-BACKBONES = ["resnet50", "dinov2_b14"]
+BACKBONES = ["resnet50", "dinov2_b14", "endossl_l16"]
 MODELS = ["tcn", "linear"]
 WEIGHTS = ["none", "sqrt_inv"]
 SEEDS = [0, 1, 2]
@@ -54,12 +55,13 @@ def evaluate(net, X, P, S):
     return {k: float(np.mean([o[k] for o in out])) for k in out[0]}
 
 
-def dev():
+def dev(backbones):
     out_dir = ROOT / "runs/grasp_dev"
     out_dir.mkdir(parents=True, exist_ok=True)
     folds = SPLIT["dev_folds"]
-    rows = []
-    for bb in BACKBONES:
+    old = out_dir / "results.json"
+    rows = [r for r in json.loads(old.read_text()) if r["backbone"] not in backbones] if old.exists() else []
+    for bb in backbones:
         data = {c: load(c, bb) for c in folds["fold1"] + folds["fold2"]}
         for (tr, va), model, cw, seed in product([("fold1", "fold2"), ("fold2", "fold1")], MODELS, WEIGHTS, SEEDS):
             Xtr = [data[c][0] for c in folds[tr]]
@@ -79,7 +81,8 @@ def dev():
                        "Held-out per-case macro-F1 averaged over cases, seeds and fold directions.", "",
                        "| Backbone | Model | Class weight | Best epoch | Step F1 | Phase F1 | Step acc | Phase acc |",
                        "|---|---|---|---|---|---|---|---|"]
-    for bb, model in product(BACKBONES, MODELS):
+    done = [bb for bb in BACKBONES if any(r["backbone"] == bb for r in rows)]
+    for bb, model in product(done, MODELS):
         cands = {}
         for cw, ep in product(WEIGHTS, range(EVAL_EVERY, EPOCHS + 1, EVAL_EVERY)):
             r = [x for x in rows if (x["backbone"], x["model"], x["class_weight"], x["epoch"]) == (bb, model, cw, ep)]
@@ -97,10 +100,12 @@ def dev():
     print("\n".join(L))
 
 
-def final():
+def final(backbones):
     sel = json.loads((ROOT / "runs/grasp_dev/selected.json").read_text())
     cases = list(SPLIT["splits"]["train"]["cases"])
     for name, s in sel.items():
+        if s["backbone"] not in backbones:
+            continue
         out = ROOT / f"runs/grasp_final/{name}"
         out.mkdir(parents=True, exist_ok=True)
         data = [load(c, s["backbone"]) for c in cases]
@@ -117,4 +122,6 @@ def final():
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["dev", "final"])
-    {"dev": dev, "final": final}[ap.parse_args().mode]()
+    ap.add_argument("--backbones", nargs="+", default=BACKBONES[:2])
+    a = ap.parse_args()
+    {"dev": dev, "final": final}[a.mode](a.backbones)

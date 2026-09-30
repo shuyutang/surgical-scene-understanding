@@ -15,6 +15,13 @@ MLP projections, vision tower frozen, loss on the answer tokens only, 1 epoch.
 Answers are parsed by exact name, then by the longest phase / step name contained in the text;
 anything else is -1 (counted wrong; its rate is reported).
 Writes runs/grasp_vlm/<tag>/<case>.npz (frame, phase, step, text) and adapter/ when training.
+
+--task instances (short-term track, surgscene.grasp_st): one question per GT instrument instance on
+the GraSP keyframes, --split train|fold1|fold2|test instead of --cases. The instance's box is drawn
+in red on the full frame (the visual prompt); the answer is "<instrument>; <action>, <action>" with
+the official names. Zero-shot, the prompt lists the 7 instruments and 14 actions; fine-tuned, a
+fixed short question. Writes runs/grasp_vlm/<tag>/instances_<split>.npz (key, instrument, actions,
+text).
 """
 
 import argparse
@@ -26,6 +33,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
+
+from surgscene import grasp_st
 
 ROOT = Path(__file__).resolve().parents[1]
 FRAMES = ROOT / "data/grasp/GraSP_1fps/frames"
@@ -71,8 +80,28 @@ def parse(text: str):
     return (PHASES.index(p) if p else -1), (STEPS.index(s) if s else -1)
 
 
-def image(case, frame):
-    return Image.open(FRAMES / case / f"{frame:05d}.jpg").convert("RGB").resize(SIZE, Image.BICUBIC)
+def image(case, frame, bbox=None):
+    im = Image.open(FRAMES / case / f"{frame:05d}.jpg").convert("RGB")
+    if bbox is not None:
+        im = Image.fromarray(grasp_st.draw_box(np.asarray(im), bbox, thickness=8))
+    return im.resize(SIZE, Image.BICUBIC)
+
+
+INST_FT_PROMPT = "Which surgical instrument is inside the red box, and what is it doing?"
+
+
+def instance_zs_prompt():
+    return ("This is a frame from a robot-assisted radical prostatectomy video. One surgical instrument is marked "
+            "with a red box.\nInstrument types: " + ", ".join(grasp_st.INSTRUMENTS) +
+            "\nAtomic actions: " + ", ".join(grasp_st.ACTIONS) +
+            "\nWhich instrument is inside the red box, and which one or more actions is it performing? "
+            "Answer exactly as: <instrument>; <action>, <action>")
+
+
+def instance_items(split):
+    """[(case, frame, bbox, answer, key)] for a short-term split."""
+    return [(r["case"], r["frame"], r["bbox"], grasp_st.answer(r["instrument"], r["actions"]), r["key"])
+            for r in grasp_st.load_instances(split)]
 
 
 def messages(prompt, answer=None):
@@ -101,11 +130,39 @@ def frames_of(case, stride):
     return np.load(ROOT / f"data/cache/grasp/{case}.npz")["frame"][::stride]
 
 
+def generate(proc, model, prompts, ims):
+    chat = [proc.apply_chat_template(messages(p), tokenize=False, add_generation_prompt=True) for p in prompts]
+    inp = proc(text=chat, images=ims, padding=True, return_tensors="pt").to("cuda")
+    gen = model.generate(**inp, max_new_tokens=32, do_sample=False)
+    return proc.batch_decode(gen[:, inp["input_ids"].shape[1]:], skip_special_tokens=True)
+
+
+@torch.no_grad()
+def predict_instances(args, proc, model, out):
+    path = out / f"instances_{args.split}.npz"
+    if path.exists():
+        return
+    items, texts, t0 = instance_items(args.split), [], time.time()
+    prompt = INST_FT_PROMPT if args.adapter else instance_zs_prompt()
+    for i in range(0, len(items), args.batch):
+        chunk = items[i:i + args.batch]
+        texts += generate(proc, model, [prompt] * len(chunk), [image(c, f, b) for c, f, b, _, _ in chunk])
+    parsed = [grasp_st.parse(t) for t in texts]
+    ins = np.array([p[0] for p in parsed])
+    np.savez_compressed(path, key=np.array([k for *_, k in items]), instrument=ins,
+                        actions=np.stack([p[1] for p in parsed]), text=np.array(texts))
+    print(f"{args.tag} {args.split}: {len(items)} instances in {time.time() - t0:.0f} s; unparsed instrument "
+          f"{(ins < 0).mean():.3f}, no action {(~np.stack([p[1] for p in parsed]).any(1)).mean():.3f}; e.g. {texts[0]!r}",
+          flush=True)
+
+
 @torch.no_grad()
 def predict(args):
     proc, model = load_model(args.quant4 or bool(args.adapter), args.adapter)
     out = OUT / args.tag
     out.mkdir(parents=True, exist_ok=True)
+    if args.task == "instances":
+        return predict_instances(args, proc, model, out)
     zs = zero_shot_prompt()
     for case in args.cases:
         path = out / f"{case}.npz"
@@ -116,10 +173,7 @@ def predict(args):
         for i in range(0, len(fr), args.batch):
             chunk = fr[i:i + args.batch]
             prompts = [zs if not args.adapter else ft_prompt(case, f) for f in chunk]
-            chat = [proc.apply_chat_template(messages(p), tokenize=False, add_generation_prompt=True) for p in prompts]
-            inp = proc(text=chat, images=[image(case, f) for f in chunk], padding=True, return_tensors="pt").to("cuda")
-            gen = model.generate(**inp, max_new_tokens=32, do_sample=False)
-            texts += proc.batch_decode(gen[:, inp["input_ids"].shape[1]:], skip_special_tokens=True)
+            texts += generate(proc, model, prompts, [image(case, f) for f in chunk])
         pr = np.array([parse(t) for t in texts])
         np.savez_compressed(path, frame=fr, phase=pr[:, 0], step=pr[:, 1], text=np.array(texts))
         print(f"{args.tag} {case}: {len(fr)} frames in {time.time() - t0:.0f} s; unparsed phase "
@@ -136,10 +190,13 @@ def train(args):
     model = get_peft_model(model, lcfg)
     model.print_trainable_parameters()
     items = []
-    for case in args.cases:
+    if args.task == "instances":
+        items = [(c, f, a, b) for c, f, b, a, _ in instance_items(args.split)]
+    for case in (args.cases if args.task == "steps" else []):
         lab = np.load(ROOT / f"data/cache/grasp/{case}.npz")
         for f, p, s in zip(lab["frame"][::args.stride], lab["phase"][::args.stride], lab["step"][::args.stride]):
-            items.append((case, int(f), f"{PHASES[p]}, {STEPS[s]}"))
+            items.append((case, int(f), f"{PHASES[p]}, {STEPS[s]}", None))
+    q = (lambda c, f: INST_FT_PROMPT) if args.task == "instances" else ft_prompt
     random.Random(0).shuffle(items)
     opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=args.lr, weight_decay=0.0)
     steps = len(items) // (args.batch * args.accum)
@@ -150,10 +207,10 @@ def train(args):
         for _ in range(args.accum):
             batch = items[it:it + args.batch]
             it += args.batch
-            full = [proc.apply_chat_template(messages(ft_prompt(c, f), a), tokenize=False) for c, f, a in batch]
-            prompt = [proc.apply_chat_template(messages(ft_prompt(c, f)), tokenize=False, add_generation_prompt=True)
-                      for c, f, a in batch]
-            ims = [image(c, f) for c, f, _ in batch]
+            full = [proc.apply_chat_template(messages(q(c, f), a), tokenize=False) for c, f, a, _ in batch]
+            prompt = [proc.apply_chat_template(messages(q(c, f)), tokenize=False, add_generation_prompt=True)
+                      for c, f, a, _ in batch]
+            ims = [image(c, f, b) for c, f, _, b in batch]
             enc = proc(text=full, images=ims, padding=True, return_tensors="pt").to("cuda")
             labels = enc["input_ids"].clone()
             labels[enc["attention_mask"] == 0] = -100
@@ -178,7 +235,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["predict", "train"])
     ap.add_argument("--tag", required=True)
-    ap.add_argument("--cases", nargs="+", required=True)
+    ap.add_argument("--task", choices=["steps", "instances"], default="steps")
+    ap.add_argument("--cases", nargs="+")
+    ap.add_argument("--split", help="instances: train | fold1 | fold2 | test")
     ap.add_argument("--stride", type=int, default=10)
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--accum", type=int, default=2)
