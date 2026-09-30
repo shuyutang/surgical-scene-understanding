@@ -55,4 +55,6 @@ learned stereo. Its disparity at the pivot, on the instrument body, is 0.3–1.4
     instruments. SurgPose's GT is triangulated keypoints only, which is sparse but would be
     enough to supervise disparity at those pixels.
 
-Outputs: `runs/v5_dev/{results.json, report.md, oracle_pixel_depth.json}`.
+Outputs: `runs/v5_dev/{results.json, report.md, oracle_pixel_depth.json}` (the last from
+`scripts/v5_dev_stereo_tip.py --oracle --models realtime@4 middlebury@32`; the full-resolution
+`middlebury@32` row was skipped at the time).

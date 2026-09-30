@@ -1,159 +1,132 @@
-# Surgical scene understanding: 3D instrument tracking and tool–tissue proximity
+# Surgical scene understanding
 
-A perception pipeline for robotic-surgery stereo video that locates surgical instrument tips in 3D
-and estimates their distance to tissue, built and evaluated on public data. It compares modern
-learned components (foundation-model backbones, learned stereo, SAM 2) with classical estimation
-(shape priors, Kalman filtering, fusion of the robot's own kinematics) one component at a time.
+Perception for robot-assisted surgery on public data. Two questions:
+- **Where are the instruments, and how close are they to tissue?** 3D tracking from stereo video and
+  robot kinematics.
+- **What is happening?** Surgical steps, instrument types and actions.
 
-**Every test is specified in writing and committed before it runs**
-([validation plan](docs/validation_plan.md)), and failures are reported as failures.
+Each component is compared **conventional vs modern**, one swap at a time: classical estimation
+and ImageNet CNNs against foundation models, learned stereo and vision-language models. Every
+test was pre-registered, and failures are reported as failures.
 
-## Headline results
+## Highlights
 
-Target use case: a tool-to-tissue proximity alert. Requirements: 3D tip error ≤ 5 mm (R1), end-to-end
-p99 latency < 33 ms (R3), calibrated uncertainty (R7). Full requirement → test → result mapping:
-[docs/traceability.md](docs/traceability.md).
+- **The robot's own kinematics beat a bigger network for 3D.** An EKF fusing dVRK kinematics with
+  the vision cut the 3D tip error from **10.0 to 5.3 mm**. With a 6 mm stereo baseline, almost all
+  of the error was depth, which no 2D detector fixes.
+- **Learned stereo wins on tissue, by an order of magnitude.** On CT ground truth: SGM 17.1 mm →
+  RAFT-Stereo 1.6 mm. Fast-FoundationStereo is another **0.5 mm better and 2× faster**.
+- **On thin instruments, stereo still loses to kinematics.** The jaw's disparity bleeds into the
+  tissue behind it. Fast-FoundationStereo's monocular prior cuts this error 3× (median 12.9 →
+  4.0 mm), but its failures are still gross.
+- **For "what is happening", temporal context and DINOv2 features win.** Step recognition reaches
+  **0.47 macro-F1**. A fine-tuned 8B vision-language model gets 0.21, and a surgical
+  self-supervised backbone (EndoSSL) 0.24.
+- **Not met:** the 5 mm 3D target overall. Long-jaw instruments remain the hard case, and the 3D
+  test set is used up (fresh data is needed for further claims).
 
-| Stage | Method | Key result (95% CI) |
-|---|---|---|
-| v2 | U-Net keypoints, shape prior + robust MAP, Kalman filter, stereo triangulation | 3D tip error 10.0 [7.6, 12.8] mm: stereo depth fails with a 6 mm baseline |
-| v3 C | + causal fusion of dVRK kinematics (online hand-eye, iterated EKF) | 5.27 [3.56, 7.43] mm (−4.8 mm vs v2); 3.9 mm on standard instruments |
-| v3 A | DINOv2 ViT-S keypoints with a learned uncertainty head | No clean-frame gain; −5.1 px on occluded keypoints; post-hoc uncertainty inflation halved |
-| v3 B | RAFT-Stereo vs SGM, tissue depth (SERV-CT, CT ground truth) | 17.1 → 1.6 mm (1.9 mm at 10.7 ms) |
-| v4 | Jaw-length constraint for long-jaw instruments (SAM 2 masks tried, dropped) | 4.82 [3.63, 6.21] mm; primary endpoint failed (one misclassified arm) |
-| v5 | Occlusion-aware tissue memory (development) | Hidden-tissue depth 2.54 → 1.28 mm vs a local plane; tip error still dominates distance |
-| v5 B6 | Fast-FoundationStereo vs RAFT-Stereo, tissue depth (SERV-CT) | 1.86 → 1.37 mm, −0.49 [−0.95, −0.09]; 2× faster; on instrument jaws median 4.0 mm at GT pixels (RAFT 12.9) |
-| Scene semantics | Phase / step recognition on GraSP (5 test cases) | Step macro-F1: DINOv2 + causal MS-TCN **0.469**, ResNet-50 + MS-TCN 0.401, EndoSSL (surgical SSL) + MS-TCN 0.238, per-frame 0.26–0.33, fine-tuned Qwen3-VL-8B 0.21 |
-| Scene semantics, short-term | Instrument type and actions per instance (GraSP keyframes, GT boxes) | DINOv2 features + MLP: instrument 0.818, actions 0.273 macro-F1; fine-tuned Qwen3-VL-8B 0.785 / 0.178 |
-| Deploy | ONNX → TensorRT FP16, C++ runtime | U-Net path p99 2.6 ms end to end (without stereo); DINOv2 engine 4.4 ms, +0.08 px from FP16 |
+## Results
 
-Summary of what worked, component by component: [docs/conventional_vs_modern.md](docs/conventional_vs_modern.md).
-Learned models won on stereo matching, occlusion and uncertainty; the largest 3D gain came from
-fusing the robot's kinematics. **R1 is not met overall**; the evaluation set has been used four times
-(disclosed in each pre-registration), so further claims need fresh data.
+95% CIs in brackets; every row links back to a pre-registered endpoint in
+[docs/validation_plan.md](docs/validation_plan.md) unless marked *development*.
+
+### 3D instruments and tissue (SurgPose stereo + dVRK kinematics; SERV-CT for tissue depth)
+
+| Component | Conventional | Modern | Result | Winner |
+|---|---|---|---|---|
+| 3D tip position | Stereo triangulation of keypoints | + causal EKF fusing robot kinematics (online hand-eye) | **10.05 → 5.27 mm**, −4.78 [−6.93, −2.71]; 3.9 mm on standard instruments | Kinematics fusion |
+| Keypoint backbone | ResNet-34 U-Net | DINOv2 ViT-S + learned uncertainty | Clean frames: no gain. Occluded: −5.1 px. Uncertainty–error correlation −0.25 → +0.53 | Modern, where appearance is ambiguous |
+| Tissue depth | SGM | RAFT-Stereo | **17.06 → 1.58 mm** on CT ground truth | Learned |
+| Tissue depth, newer model | RAFT-Stereo (2021) | Fast-FoundationStereo (2026) | **1.86 → 1.37 mm**, −0.49 [−0.95, −0.09]; 104 → 47 ms | Newer |
+| Long-jaw instruments | Rigid tool model | + jaw-length constraint | 5.27 → 4.82 mm; primary endpoint failed (one misclassified arm) | Neither shown |
+| Instrument depth from stereo | Kinematics (4.8 mm median) | Stereo on jaw pixels | RAFT 12.9 mm; Fast-FoundationStereo 4.0 mm median but a heavy tail (*development*) | Kinematics |
+| Tissue hidden by the instrument | Local plane, current frame | Temporal tissue memory with SAM 2 masks | 2.54 → 1.28 mm (*development*) | Memory |
+| Deployment | — | ONNX → TensorRT FP16, C++ runtime | p99 2.6 ms end to end without stereo; DINOv2 engine 4.4 ms (+0.08 px from FP16) | — |
+
+### Scene semantics (GraSP, robot-assisted prostatectomy, 5 test surgeries)
+
+Metric: macro-F1, the per-class F1 averaged with every class weighted equally, computed per
+surgery. Rare steps and actions count as much as common ones.
+
+| Task | Best model | Score | Comparisons [95% CI] |
+|---|---|---|---|
+| Surgical step, online (21 classes, every second) | DINOv2 features + causal temporal CNN (MS-TCN) | **0.469** | vs ResNet-50: +0.067 [+0.039, +0.096]<br>vs per-frame: +0.137 [+0.079, +0.224]<br>EndoSSL: 0.238<br>fine-tuned Qwen3-VL-8B: 0.21 (zero-shot 0.03) |
+| Instrument type (7 classes, given its box) | DINOv2 features + MLP | **0.818** | fine-tuned Qwen3-VL-8B 0.785 (−0.033 [−0.063, +0.012])<br>ResNet-50 0.694 |
+| Instrument action (14 classes, multi-label) | DINOv2 features + MLP | **0.273** | fine-tuned Qwen3-VL-8B 0.178 (−0.095 [−0.117, −0.065]); it only uses 4 of the 14 actions |
+
+Component-by-component discussion: [docs/conventional_vs_modern.md](docs/conventional_vs_modern.md).
+Requirements → tests → results: [docs/traceability.md](docs/traceability.md).
+
+## How it's evaluated
+
+- **Pre-registration.** Each test's endpoints, criteria and frozen configuration are committed
+  before it runs, and the test runs once. Anything decided afterwards is a dated, marked
+  amendment.
+- **Honest units.** Confidence intervals come from bootstrapping over trajectories, stereo pairs
+  or surgeries, not frames. Each reuse of a test set is disclosed; the SurgPose test split has
+  been used four times.
+- **Development only on train/tune splits** (official folds for GraSP). Frozen split manifests
+  with hashes are in `splits/`.
 
 ## Pipeline
 
 ```
- stereo video ──► keypoint network (U-Net / DINOv2) ──► shape prior + MAP ──► Kalman filter (2D) ─┐
-      │                                                                                           ├─► 3D tips + covariance
-      │          robot kinematics ──► online hand-eye + tool geometry ──► iterated EKF ───────────┘        │
-      │                                                                                                    ▼
-      └────────► learned stereo (RAFT) ──► tissue memory (instrument masks: SAM 2) ──────────► tip-to-tissue distance, alert
+3D:   stereo video ─► keypoints (U-Net / DINOv2) ─► shape prior + MAP ─► Kalman filter ─┐
+      robot kinematics ─► online hand-eye + tool model ─► iterated EKF ─────────────────┴─► 3D tips + covariance
+      stereo ─► learned stereo ─► tissue memory (SAM 2 instrument masks) ─────────────────► tip-to-tissue distance, alert
+
+Semantics: frames ─► frozen backbone (ResNet-50 / DINOv2 / EndoSSL) ─► causal MS-TCN ─► phase + step
+           instance box ─► crop + frame features ─► MLP ─► instrument type + actions   (vs Qwen3-VL-8B, QLoRA)
 ```
 
-## Setup
+## Quick start
 
 ```bash
-uv sync -p 3.12                       # Python 3.12, PyTorch 2.8 (CUDA 12.8 wheels)
-uv run --group dev pytest             # 51 unit tests; no data needed
+uv sync -p 3.12                  # Python 3.12, PyTorch 2.8 (CUDA 12.8 wheels)
+uv run --group dev pytest        # 51 unit tests on synthetic data; no datasets needed
 ```
 
-Optional dependency groups: `stereo` (RAFT-Stereo, Fast-FoundationStereo), `sam` (SAM 2 via
-transformers), `vlm` (Qwen3-VL, QLoRA), `deploy` (TensorRT, ONNX). Stereo code and weights are
-fetched into `third_party/` (gitignored):
+Optional groups:
 
-```bash
-git clone https://github.com/princeton-vl/RAFT-Stereo third_party/RAFT-Stereo
-(cd third_party/RAFT-Stereo && bash download_models.sh)
-git clone https://github.com/NVlabs/Fast-FoundationStereo third_party/Fast-FoundationStereo
-# research checkpoints: Google Drive folder linked in its readme, into third_party/Fast-FoundationStereo/weights/
-```
+| Group | For |
+|---|---|
+| `stereo` | RAFT-Stereo, Fast-FoundationStereo |
+| `sam` | SAM 2 |
+| `vlm` | Qwen3-VL, QLoRA |
+| `deploy` | TensorRT, ONNX |
 
-### Data
+Third-party model code goes in `third_party/` (gitignored); the fetch commands are in
+[src/surgscene/learned_stereo.py](src/surgscene/learned_stereo.py) and
+[src/surgscene/backbones.py](src/surgscene/backbones.py). Every experiment's commands are in
+[scripts/README.md](scripts/README.md#reproducing).
 
-Nothing is redistributed here; datasets go under `data/` (gitignored). Check each dataset's own
-terms before use.
+**Data** (not redistributed; place under `data/`, check each dataset's terms):
 
-| Dataset | Used for | Source | Terms |
-|---|---|---|---|
-| SurgPose | Keypoints, stereo, dVRK kinematics (main dataset) | Zenodo record 15278516 | CC BY 4.0 |
-| SISVSE | Semantic segmentation (Phase 1) | MICCAI 2022 SISVSE release | see the dataset's terms |
-| EndoVis 2018 Robotic Scene Segmentation | Zero-shot segmentation test | HF mirror `BeileiCui/EndoVis18` | challenge terms |
-| SERV-CT | Stereo depth accuracy (CT ground truth) | SERV-CT release | CC BY-NC-SA 4.0 (non-commercial) |
-| GraSP (1 fps) | Phase and step recognition (scene-semantics track) | github.com/BCV-Uniandes/GraSP (Google Drive) | no data license stated; research use |
+| Dataset | Used for | Terms |
+|---|---|---|
+| [SurgPose](https://zenodo.org/records/15278516) | Stereo video, keypoints, dVRK kinematics (main 3D dataset) | CC BY 4.0 |
+| SERV-CT | Stereo depth vs CT ground truth | CC BY-NC-SA 4.0 |
+| SISVSE, EndoVis 2018 | Segmentation (v2 Phase 1) | dataset / challenge terms |
+| [GraSP](https://github.com/BCV-Uniandes/GraSP) (1 fps) | Phases, steps, instruments, actions | no license stated; research use |
 
-Pretrained models: DINOv2 (Apache 2.0, via `timm`), SAM 2.1 (Apache 2.0, via `transformers`),
-RAFT-Stereo (MIT), Qwen3-VL-8B-Instruct (Apache 2.0), torchvision ResNet-50 (BSD), EndoSSL ViT-L/16
-(PyTorch conversion released with SurgVISTA; checkpoint license not stated, research use).
-Fast-FoundationStereo's code and research checkpoints are under NVIDIA's **research-only
-(non-commercial)** license. TensorRT is installed from NVIDIA's pip wheels under NVIDIA's license.
+**Pretrained models:**
+- Apache 2.0: DINOv2 (`timm`), SAM 2.1 (`transformers`), Qwen3-VL-8B-Instruct.
+- MIT: RAFT-Stereo.
+- BSD: torchvision ResNet-50.
+- Research-only: Fast-FoundationStereo (NVIDIA research license), EndoSSL (via SurgVISTA's
+  conversion; no license stated).
+- TensorRT comes from NVIDIA's pip wheels.
 
-Frozen split manifests (with hashes) are committed in `splits/`.
+## Repository layout
 
-## Reproducing
-
-Scripts are indexed in [scripts/README.md](scripts/README.md) and documents in
-[docs/README.md](docs/README.md). Test-set commands are marked *once*: they were run a single time,
-after the matching pre-registration was committed.
-
-```bash
-# data caches
-uv run python scripts/prepare_seg_data.py && uv run python scripts/prepare_surgpose.py
-
-# v2: segmentation, keypoints, structured inference, temporal, stereo
-uv run python scripts/train_seg.py configs/seg_unet_r34.yaml
-uv run python scripts/train_kp.py configs/kp_unet_r34_decentered.yaml
-uv run python scripts/cache_stage2_obs.py runs/<kp_run>/best.pt
-uv run python scripts/tune_stage2.py && uv run python scripts/cache_tissue_planes.py
-uv run python scripts/eval_stage2.py --split tune            # --split test2: once
-
-# v3: kinematics fusion (C), learned stereo (B), DINOv2 keypoints (A)
-uv run python scripts/fit_tool_geometry.py
-uv run python scripts/eval_v3c.py --split tune               # --split test2: once
-uv run --group stereo python scripts/eval_stereo_tune.py && uv run --group stereo python scripts/eval_servct.py
-uv run python scripts/train_kp_vit.py configs/kp_vit_s.yaml
-uv run python scripts/eval_kp_vit.py --split tune            # --split test2: once
-
-# v4: SAM 2 masks, instrument-type library, jaw-length constraint
-uv run --group sam python scripts/v4_make_masks.py && uv run python scripts/v4_mask_qa.py
-uv run python scripts/v4_tool_library.py
-uv run python scripts/eval_v4.py --split tune                # --split test2: once
-
-# v5 (development, tune only): stereo on instruments, tissue memory
-uv run --group stereo --group sam python scripts/v5_tissue_memory.py
-# v5 step 2: Fast-FoundationStereo (selection on tune, jaw check on tune, B6 on SERV-CT once)
-uv run --group stereo python scripts/eval_stereo_tune.py --out runs/v5_ffs_tune --select-prefix ffs: \
-    --methods middlebury realtime@4 ffs:23-36-37@8 ffs:23-36-37@4 ffs:20-26-39@8 ffs:20-30-48@4
-uv run --group stereo --group sam python scripts/v5_dev_stereo_tip.py --models middlebury@32 ffs:23-36-37@8 --out runs/v5_ffs_tip
-uv run --group stereo python scripts/eval_servct.py --method ffs:23-36-37@8 --reference middlebury@32
-
-# scene semantics (GraSP): features, temporal models, VLM, endpoints
-uv run python scripts/grasp_prepare.py
-uv run python scripts/grasp_features.py --backbone resnet50 && uv run python scripts/grasp_features.py --backbone dinov2_b14
-uv run python scripts/grasp_tcn.py dev && uv run python scripts/grasp_tcn.py final
-uv run --group vlm python scripts/grasp_vlm.py train --tag final_ft --cases <8 train cases> --stride 10
-uv run --group vlm python scripts/grasp_vlm.py predict --tag test_ft --adapter runs/grasp_vlm/final_ft/adapter --cases <test cases> --stride 5
-uv run python scripts/eval_grasp.py test                     # once
-# round 2: EndoSSL backbone (S5), short-term instrument and action recognition (ST1-ST4)
-uv run python scripts/grasp_features.py --backbone endossl_l16   # weights: see src/surgscene/backbones.py
-uv run python scripts/grasp_tcn.py dev --backbones endossl_l16 && uv run python scripts/grasp_tcn.py final --backbones endossl_l16
-uv run python scripts/grasp_shortterm.py feats && uv run python scripts/grasp_shortterm.py dev && uv run python scripts/grasp_shortterm.py final
-uv run --group vlm python scripts/grasp_vlm.py train --task instances --tag st_final_ft --split train
-uv run --group vlm python scripts/grasp_vlm.py predict --task instances --tag st_test_ft --adapter runs/grasp_vlm/st_final_ft/adapter --split test
-uv run python scripts/eval_grasp.py test-s5 && uv run python scripts/eval_grasp_shortterm.py test   # once
-
-# deployment: TensorRT FP16 engines, C++ runtime and latency benchmark
-uv sync --group deploy && cpp/scripts/fetch_deps.sh
-uv run --group deploy python scripts/export_trt.py runs/<kp_run>/best.pt
-uv run --group deploy python scripts/eval_deploy.py
-cmake -S cpp -B cpp/build && cmake --build cpp/build -j && cpp/build/tests
-```
-
-## Layout
-
-- `src/surgscene/`: the library
-  - perception: `models`, `keypoints`, `kp_vit`, `learned_stereo`, `sam2_track`
-  - structured inference and estimation: `shape`, `structured`, `temporal`, `geometry`, `fusion`
-  - tissue and proximity: `proximity`, `tissue_memory`
-  - evaluated pipelines and evaluation: `pipeline`, `stage2`, `evaluation`, `kp_eval`
-  - deployment: `deploy`, `trt_runner`
-- `scripts/`: data preparation, training, evaluation, export ([index](scripts/README.md))
-- `configs/`: training configs and frozen, hashed evaluation configs
-- `cpp/`: C++ runtime (TensorRT engine, Eigen MAP solver, Kalman filter, stereo), GoogleTest parity tests, latency bench
-- `docs/`: validation plan, pre-specified test reports, plans and summaries ([index](docs/README.md))
-- `splits/`: frozen split manifests
+| Path | Contents |
+|---|---|
+| `src/surgscene/` | The library: keypoints, stereo, fusion, tracking, tissue, scene semantics, deployment |
+| `scripts/` | Data preparation, training, evaluation ([index and commands](scripts/README.md)) |
+| `configs/`, `splits/` | Training configs; frozen, hashed evaluation configs and split manifests |
+| `cpp/` | C++ runtime: TensorRT engine, MAP solver, Kalman filter; parity tests; latency benchmark |
+| `docs/` | Validation plan, test reports, plans and summaries ([index](docs/README.md)) |
 
 ## License
 
-Code: MIT (see [LICENSE](LICENSE)). Datasets and pretrained weights keep their own licenses (above).
+Code: MIT ([LICENSE](LICENSE)). Datasets and pretrained weights keep their own licenses.

@@ -1,7 +1,7 @@
 [project]
 name = "surgscene"
 version = "0.1.0"
-description = "3D surgical instrument tracking and tool-tissue proximity from stereo video and robot kinematics"
+description = "Surgical scene understanding: 3D instrument tracking and tool-tissue proximity from stereo video and robot kinematics, and workflow / instrument-action recognition"
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

@@ -78,7 +78,7 @@ tip midpoint), every 10th frame, paired. Mean 3D tip-midpoint error, mm
 
 As in step 0: disparity at the projections of the GT pivot and GT tips (3 × 3 median), which
 removes pixel selection and extrapolation. Absolute depth error, mm (median / mean;
-`runs/v5_ffs_tip/oracle_pixel_depth.json`):
+`v5_dev_stereo_tip.py --oracle --models ffs:23-36-37@8 --out runs/v5_ffs_tip`):
 
 | Source | Pivot | Tips |
 |---|---|---|

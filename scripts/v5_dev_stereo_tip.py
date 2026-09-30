@@ -2,6 +2,7 @@
 
   uv run --group stereo --group sam python scripts/v5_dev_stereo_tip.py [--every 10]
   ... --models middlebury@32 ffs:23-36-37@8 --out runs/v5_ffs_tip    # v5 step 2
+  ... --oracle --models ffs:23-36-37@8 --out runs/v5_ffs_tip          # upper bound, below
 
 Keypoint triangulation is limited by independent 2-3 px detections in each eye (1 px of disparity
 ~ 3.7 mm of depth at 200 mm on this rig); dense stereo matches sub-pixel over whole regions. Per
@@ -16,6 +17,12 @@ frame and arm:
 Compared with the GT tip midpoint (GT label triangulation, as every 3D endpoint here) against:
 v2 keypoint triangulation, the v3 kinematic fusion point, v3 hybrid, v4 hybrid.
 Writes runs/v5_dev/{results.json, report.md}.
+
+--oracle (upper bound): the disparity is read at the projections of the GT pivot and GT tips
+(3 x 3 median) on every 4th frame, at half and full resolution, and compared with the GT depth;
+the v3 kinematic fusion point's error along the ray is the reference. Removes pixel selection and
+extrapolation from the question. Writes <out>/oracle_pixel_depth.json: per source,
+[median, mean, n] absolute depth error in mm.
 """
 
 import argparse
@@ -93,14 +100,62 @@ def jaw_tip_from_disparity(d, rect, mask, u_piv, u_mid):
     return rect.R1.T @ Xr, int(ok.sum())
 
 
+def oracle(models, out):
+    sift, res = cv2.SIFT_create(4000), {}
+    for key in models:
+        net = make_stereo(key)
+        for half in (True, False):
+            tag = f"{key} {'half' if half else 'full'}"
+            acc = {"pivot": [], "tip": [], "kin_tip": [], "kin_pivot": []}
+            for traj in TUNE:
+                D = load_prepared(traj)
+                rect = Rectifier(D["rig"], half=half)
+                tracks = run(D, FusionParams(**V4["fusion"]), None)
+                idx = np.arange(20, len(D["f5"]), 4)
+                dy = float(np.median(np.concatenate([sift_dy(sift, *rect.rectify(*read_pair(traj, D["f5"][i])))
+                                                     for i in idx[::8]])))
+                dy = dy if abs(dy) > 0.5 * (1 if half else 2) else 0.0  # B3 rule, in this resolution's pixels
+                for i in idx:
+                    fr = D["f5"][i]
+                    a, b = rect.rectify(*read_pair(traj, fr))
+                    d = net.disparity(a, shift_rows(b, dy) if dy else b)
+                    for arm, (ka, kb) in TIP.items():
+                        pj = ARMS[arm].start + 2  # pivot keypoint of the arm
+                        for name, js in (("pivot", [pj]), ("tip", [ka, kb])):
+                            for j in js:
+                                X = D["G"][i, j]
+                                if not np.isfinite(X).all():
+                                    continue
+                                Xr = rect.R1 @ X
+                                x, y = np.round(rect.f * Xr[:2] / Xr[2] + [rect.cx, rect.cy]).astype(int)
+                                if not (2 <= x < d.shape[1] - 2 and 2 <= y < d.shape[0] - 2):
+                                    continue
+                                dd = np.nanmedian(d[y - 1:y + 2, x - 1:x + 2])
+                                if np.isfinite(dd) and dd > 0:
+                                    acc[name].append(abs(rect.f * rect.B / dd - Xr[2]))
+                        g = (D["G"][i, ka] + D["G"][i, kb]) / 2
+                        km = (tracks[arm].X[fr, 2] + tracks[arm].X[fr, 3]) / 2
+                        if np.isfinite(g).all() and np.isfinite(km).all():
+                            acc["kin_tip"].append(abs((km - g) @ (g / np.linalg.norm(g))))
+                        kp, gp = tracks[arm].X[fr, 0], D["G"][i, pj]
+                        if np.isfinite(gp).all() and np.isfinite(kp).all():
+                            acc["kin_pivot"].append(abs((kp - gp) @ (gp / np.linalg.norm(gp))))
+            res[tag] = {k: [round(float(np.median(v)), 2), round(float(np.mean(v)), 2), len(v)] for k, v in acc.items()}
+            print(tag, res[tag], flush=True)
+    (out / "oracle_pixel_depth.json").write_text(json.dumps(res, indent=1))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--every", type=int, default=10)
     ap.add_argument("--models", nargs="+", default=MODELS)
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--oracle", action="store_true")
     args = ap.parse_args()
     out = ROOT / args.out
     out.mkdir(parents=True, exist_ok=True)
+    if args.oracle:
+        return oracle(args.models, out)
     nets = {k: make_stereo(k) for k in args.models}
     sift = cv2.SIFT_create(4000)
     p = FusionParams(**V4["fusion"])
